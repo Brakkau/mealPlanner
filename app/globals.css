@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary-green: #4CAF50;
+  --light-green: #E8F5E9;
+  --dark-green: #2E7D32;
+  --gray-100: #F5F5F5;
+  --gray-200: #EEEEEE;
+  --gray-300: #E0E0E0;
+  --gray-500: #9E9E9E;
+  --gray-700: #616161;
+  --gray-900: #212121;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #FFFFFF;
+  color: var(--gray-900);
+}
+
+.btn-primary {
+  @apply bg-green-500 hover:bg-green-600 text-white font-medium py-3 px-6 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg active:scale-95;
+}
+
+.btn-secondary {
+  @apply bg-green-50 hover:bg-green-100 text-green-700 font-medium py-2 px-4 rounded-xl transition-all duration-200;
+}
+
+.card {
+  @apply bg-white rounded-2xl shadow-md hover:shadow-lg transition-shadow duration-200 p-4 md:p-6;
+}
+
+.input-field {
+  @apply w-full py-3 px-4 rounded-xl border border-gray-200 focus:border-green-500 focus:ring-2 focus:ring-green-200 outline-none transition-all duration-200 bg-gray-50;
+}
+
+.select-field {
+  @apply w-full py-3 px-4 rounded-xl border border-gray-200 focus:border-green-500 focus:ring-2 focus:ring-green-200 outline-none transition-all duration-200 bg-gray-50 appearance-none cursor-pointer;
+}
+
+@keyframes pulse-green {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse-green {
+  animation: pulse-green 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
+}

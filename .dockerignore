@@ -1,0 +1,36 @@
+.git
+.gitignore
+.cursor
+.vscode
+.DS_Store
+
+# Node / Next build artifacts
+node_modules
+.next
+.build
+out
+coverage
+
+# Env and local secrets
+.env
+.env.*
+!.env.example
+!.env.docker.containerdb.example
+!.env.docker.hostdb.example
+
+# Logs and temp files
+*.log
+*.tmp
+tmp
+.tmp
+.npm-cache
+.yarn-cache
+
+# Local docs/transcripts not needed in image
+README-LOCAL.md
+agent-transcripts
+
+# Large local/static assets should be mounted, not baked
+uploads
+data
+assets-local

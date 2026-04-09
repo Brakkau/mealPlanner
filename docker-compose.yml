@@ -1,0 +1,51 @@
+name: meal-planner
+
+x-app-base: &app_base
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: meal-planner:local
+  restart: unless-stopped
+  ports:
+    - "${APP_PORT:-3002}:3002"
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  healthcheck:
+    test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3002 || exit 1"]
+    interval: 15s
+    timeout: 5s
+    retries: 10
+    start_period: 30s
+
+services:
+  app-hostdb:
+    <<: *app_base
+    profiles: ["host-db"]
+    env_file:
+      - .env.docker.hostdb
+
+  app-containerdb:
+    <<: *app_base
+    profiles: ["container-db"]
+    env_file:
+      - .env.docker.containerdb
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["container-db"]
+    restart: unless-stopped
+    env_file:
+      - .env.docker.postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres_data:

@@ -1,0 +1,44 @@
+generator client {
+    provider = "prisma-client-js"
+    // Ensure Prisma client works inside the Docker Alpine image.
+    binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model Recipe {
+  id          String   @id @default(uuid())
+  title       String
+  ingredients Json
+  steps       Json
+  prepTime    Int
+  cookTime    Int
+  servings    Int
+  isGenerated Boolean  @default(false)
+  isFavourite Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  meals       Meal[]
+}
+
+model MealPlan {
+  id        String   @id @default(uuid())
+  days      Int
+  people    Int
+  type      String
+  meals     Meal[]
+  isSaved   Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Meal {
+  id         String   @id @default(uuid())
+  recipe     Recipe   @relation(fields: [recipeId], references: [id])
+  recipeId   String
+  dayNumber  Int
+  mealPlan   MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  mealPlanId String
+  isCooked   Boolean  @default(false)
+}
