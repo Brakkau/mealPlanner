@@ -29,6 +29,7 @@ interface MealPlan {
   type: string;
   meals: Meal[];
   createdAt: string;
+  isSaved: boolean;
 }
 
 export default function PastPlansPage() {
@@ -76,6 +77,7 @@ export default function PastPlansPage() {
       people: plan.people,
       type: plan.type,
       createdAt: plan.createdAt,
+      isSaved: plan.isSaved,
       meals: plan.meals.map(m => ({
         id: m.id,
         dayNumber: m.dayNumber,

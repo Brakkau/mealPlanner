@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ChefHat, Clock, Users, Check, X, ChevronDown, ChevronUp, Trash2, ShoppingCart } from "lucide-react";
+import { ChefHat, Clock, Users, Check, ChevronDown, ChevronUp, Trash2, ShoppingCart, Heart } from "lucide-react";
 import { useAppContext } from "@/lib/context";
 
 interface Recipe {
@@ -54,6 +54,28 @@ export default function CurrentPlanPage() {
       console.error('Error fetching current plan:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleFavourite = async (recipeId: string) => {
+    try {
+      const response = await fetch(`/api/recipes/${recipeId}/favourite`, {
+        method: 'POST'
+      });
+      if (!response.ok) return;
+      const updatedRecipe = await response.json();
+
+      setMealPlan(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          meals: prev.meals.map(m =>
+            m.recipe.id === recipeId ? { ...m, recipe: { ...m.recipe, isFavourite: updatedRecipe.isFavourite } } : m
+          )
+        };
+      });
+    } catch (error) {
+      console.error('Error toggling favourite:', error);
     }
   };
 
@@ -215,6 +237,19 @@ export default function CurrentPlanPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleFavourite(meal.recipe.id)}
+                    className={`p-2 rounded-lg transition-colors ${
+                      meal.recipe.isFavourite
+                        ? 'text-red-500 bg-red-50'
+                        : 'text-gray-400 hover:text-red-500 hover:bg-red-50'
+                    }`}
+                    title={meal.recipe.isFavourite ? 'Remove from favourites' : 'Add to favourites'}
+                    aria-label={meal.recipe.isFavourite ? 'Remove from favourites' : 'Add to favourites'}
+                  >
+                    <Heart className="w-5 h-5" fill={meal.recipe.isFavourite ? 'currentColor' : 'none'} />
+                  </button>
                   {/* Cook/Cooked Button */}
                   <button
                     onClick={() => toggleCooked(meal.id)}

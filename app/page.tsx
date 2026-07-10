@@ -16,7 +16,7 @@ const MEAL_TYPES = [
 
 export default function HomePage() {
   const router = useRouter();
-  const { setCurrentMealPlan } = useAppContext();
+  const { setCurrentMealPlan, clearShoppingList } = useAppContext();
   
   const [people, setPeople] = useState(4);
   const [days, setDays] = useState(7);
@@ -67,6 +67,7 @@ export default function HomePage() {
               } else if (parsed.status === 'completed' && parsed.mealPlan) {
                 setProgress(90);
                 setStatusMessage("Finalizing meal plan...");
+                clearShoppingList();
                 setCurrentMealPlan(parsed.mealPlan);
                 setProgress(100);
                 setStatusMessage("Done! Redirecting...");

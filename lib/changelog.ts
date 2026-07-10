@@ -4,9 +4,30 @@ export interface ChangelogEntry {
   changes: string[];
 }
 
-export const APP_VERSION = "1.3.0";
+export const APP_VERSION = "1.5.0";
 
 export const changelog: ChangelogEntry[] = [
+  {
+    version: "1.5.0",
+    date: "11 May 2026",
+    changes: [
+      "Meal generation prompts rewritten so plans rotate proteins, cuisines, cooking methods, and meal formats instead of defaulting to chicken or pasta",
+      "Built-in variety rules cap repeating the same main protein and discourage copy-paste meal structures across the week",
+      "Vegetarian generation gets its own protein rotation hints so prompts stay consistent with no meat or fish",
+      "When the database is offline (e.g. local dev without Postgres), the app logs briefly and the Current Plan API responds gracefully instead of flooding errors"
+    ]
+  },
+  {
+    version: "1.4.0",
+    date: "9 Apr 2026",
+    changes: [
+      "Favourite meals from the Current Meal Plan page (heart button on each meal)",
+      "Generated meal plans stay as a preview until you choose Save as current — recipes are only stored in the database then, and your shopping list is built after you save",
+      "Swap while previewing a new plan updates the draft without saving; after saving, swaps update the shopping list as before",
+      "New plans avoid repeating any recipe title from meal plans created in the last 30 days (older history can appear again)",
+      "Meal Plan page shows a reminder and disables shopping list links until the plan is saved"
+    ]
+  },
   {
     version: "1.3.0",
     date: "25 Feb 2026",

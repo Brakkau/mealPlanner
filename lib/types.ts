@@ -33,6 +33,8 @@ export interface MealPlan {
   type: string;
   meals: Meal[];
   createdAt: Date;
+  /** Persisted in DB and set as the active "current" plan */
+  isSaved?: boolean;
 }
 
 export interface ShoppingItem {

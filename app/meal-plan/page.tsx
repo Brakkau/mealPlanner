@@ -22,12 +22,18 @@ export default function MealPlanPage() {
       const response = await fetch('/api/meal-plan/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mealPlanId: currentMealPlan.id })
+        body: JSON.stringify(
+          currentMealPlan.isSaved
+            ? { mealPlanId: currentMealPlan.id }
+            : { mealPlan: currentMealPlan }
+        )
       });
       
       if (!response.ok) throw new Error('Failed to save');
 
-      generateShoppingList(currentMealPlan, currentMealPlan.people);
+      const savedPlan = await response.json();
+      setCurrentMealPlan(savedPlan);
+      generateShoppingList(savedPlan, savedPlan.people);
       setSaved(true);
       router.push('/current-plan');
     } catch (error) {
@@ -47,10 +53,16 @@ export default function MealPlanPage() {
       const response = await fetch('/api/meal-plan/swap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mealId,
-          mealPlanId: currentMealPlan.id
-        })
+        body: JSON.stringify(
+          currentMealPlan.isSaved
+            ? { mealId, mealPlanId: currentMealPlan.id }
+            : {
+                draft: true,
+                mealId,
+                mealPlanId: currentMealPlan.id,
+                mealPlanSnapshot: currentMealPlan
+              }
+        )
       });
 
       if (!response.ok) throw new Error('Swap failed');
@@ -79,7 +91,9 @@ export default function MealPlanPage() {
                   )
                 };
                 setCurrentMealPlan(updatedPlan);
-                generateShoppingList(updatedPlan, currentMealPlan.people);
+                if (currentMealPlan.isSaved) {
+                  generateShoppingList(updatedPlan, currentMealPlan.people);
+                }
               } else if (parsed.status === 'error') {
                 throw new Error(parsed.message);
               }
@@ -145,6 +159,11 @@ export default function MealPlanPage() {
           <p className="text-gray-500 text-sm mt-1">
             {currentMealPlan.days} days • {currentMealPlan.people} people • {currentMealPlan.type}
           </p>
+          {!currentMealPlan.isSaved && (
+            <p className="text-amber-700 text-sm mt-2">
+              Save as current to store recipes and build your shopping list.
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -167,7 +186,9 @@ export default function MealPlanPage() {
           </button>
           <Link
             href="/shopping-list"
-            className="btn-primary flex items-center gap-2"
+            className={`btn-primary flex items-center gap-2 ${!currentMealPlan.isSaved ? 'pointer-events-none opacity-50' : ''}`}
+            aria-disabled={!currentMealPlan.isSaved}
+            title={!currentMealPlan.isSaved ? 'Save as current first' : undefined}
           >
             <ShoppingCart size={20} />
             <span className="hidden sm:inline">Shopping List</span>
@@ -183,7 +204,11 @@ export default function MealPlanPage() {
             dayNumber={meal?.dayNumber}
             people={currentMealPlan?.people}
             onSwap={() => handleSwap(meal?.id)}
-            onFavourite={() => handleFavourite(meal?.recipe?.id)}
+            onFavourite={
+              currentMealPlan.isSaved
+                ? () => handleFavourite(meal?.recipe?.id)
+                : undefined
+            }
             isSwapping={swappingMealId === meal?.id}
           />
         ))}
@@ -199,7 +224,8 @@ export default function MealPlanPage() {
         </Link>
         <Link
           href="/shopping-list"
-          className="flex-1 btn-primary flex items-center justify-center gap-2"
+          className={`flex-1 btn-primary flex items-center justify-center gap-2 ${!currentMealPlan.isSaved ? 'pointer-events-none opacity-50' : ''}`}
+          aria-disabled={!currentMealPlan.isSaved}
         >
           <ShoppingCart size={20} />
           View Shopping List

@@ -1,22 +1,90 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest } from "next/server";
+import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
+import { getRecentRecipeTitlesFromPlans } from "@/lib/meal-plan-history";
 
 const MEAL_TYPES: Record<string, string> = {
   Quick:
-    "quick and easy weeknight dinners ready in 30 minutes or less, using minimal prep, simple techniques, and no hard-to-find ingredients",
+    "quick and easy weeknight dinners ready in 30 minutes or less, with minimal prep, simple cooking methods, and everyday supermarket ingredients. Prioritise variety by rotating proteins such as fish, prawns, turkey mince, beef strips, pork, eggs, tofu, beans, lentils, halloumi, paneer, and chickpeas instead of relying mainly on chicken. Include different meal formats such as stir-fries, tray bakes, rice bowls, tacos, wraps, noodle dishes, loaded salads, soups, skillet meals, omelettes, flatbreads, and one-pan meals. Use shortcuts where helpful, such as microwave rice, frozen vegetables, canned beans, pre-chopped vegetables, jarred sauces, spice pastes, couscous, quick-cook noodles, or air-fryer methods. Meals should still feel balanced, with a protein source, vegetables, and a filling carb or fibre-rich base.",
+
   "High Protein":
-    "high-protein balanced dinners targeting about 30-45g protein per serving, based on lean meats, fish, eggs, tofu, beans, lentils, or Greek yogurt while keeping meals practical for home cooking",
+    "high-protein balanced dinners targeting about 30-45g protein per serving, designed to be filling, nutritious, and practical for home cooking. Rotate protein sources widely, including lean beef, turkey, pork tenderloin, salmon, tuna, prawns, cod, eggs, tofu, tempeh, lentils, chickpeas, black beans, edamame, paneer, cottage cheese, Greek yogurt sauces, and occasional chicken without making chicken the default. Pair proteins with vegetables, wholegrains, potatoes, beans, pulses, or high-fibre carbs to create complete meals. Include a mix of cuisines and formats such as burrito bowls, curries, stews, grain bowls, tray bakes, chilli, kebabs, stir-fries, frittatas, protein pasta dishes, stuffed peppers, and hearty salads. Avoid bland bodybuilding-style meals; prioritise flavour, sauces, herbs, spices, marinades, and texture contrast while keeping the meal family-appropriate.",
+
   Vegetarian:
-    "vegetarian dinners with no meat or fish, focused on satisfying texture and protein from legumes, tofu, paneer, eggs (optional), grains, and seasonal vegetables",
+    "vegetarian dinners with no meat or fish, focused on satisfying, filling meals that do not feel like side dishes. Build meals around varied protein sources such as lentils, chickpeas, black beans, kidney beans, butter beans, tofu, tempeh, paneer, halloumi, eggs where suitable, Greek yogurt, cottage cheese, nuts, seeds, quinoa, and wholegrains. Include a wide range of vegetables, grains, legumes, herbs, spices, and sauces to create meals with strong texture and flavour. Suggest varied dinner formats including curries, dahls, chilli, bean tacos, veggie burgers, shakshuka, frittatas, tray bakes, stuffed peppers, noodle bowls, grain bowls, pasta bakes, risottos, soups, flatbreads, mezze-style plates, and hearty salads. Avoid overusing cheese, pasta, or mushrooms as the main solution. Meals should be satisfying for a family and suitable for people who usually eat meat.",
+
   Meat:
-    "meat-based dinners featuring chicken, beef, pork, turkey, or fish as the main protein, paired with vegetables and complex carbs for a complete meal",
+    "meat-based dinners where animal protein is the main feature, but with strong variety across chicken, turkey, beef, pork, lamb, fish, prawns, salmon, cod, tuna, sausages, lean mince, meatballs, and slow-cooked cuts. Do not default to chicken repeatedly; rotate different proteins, cuts, cuisines, and cooking methods throughout the plan. Pair meat with vegetables, salads, grains, potatoes, rice, pasta, beans, lentils, or flatbreads for complete balanced meals. Include varied formats such as tray bakes, tacos, kebabs, burgers, meatballs, stews, curries, stir-fries, noodle bowls, rice bowls, roasts, skillet meals, pasta dishes, soups, wraps, and grilled or air-fried meals. Use marinades, spice blends, sauces, herbs, and side dishes to make meals feel distinct rather than variations of the same protein and carb combination.",
+
   Budget:
-    "budget-friendly dinners that maximize value using low-cost staples, frozen or canned options where appropriate, and ingredients reused across multiple days to reduce waste",
+    "budget-friendly dinners that maximise value while still offering variety, flavour, and balanced nutrition. Prioritise low-cost staples such as lentils, beans, chickpeas, eggs, tinned tomatoes, rice, pasta, potatoes, oats, couscous, frozen vegetables, seasonal vegetables, canned fish, cheaper cuts of meat, mince, sausages, tofu, and supermarket own-brand ingredients. Use meat strategically rather than as the only focus, stretching it with beans, lentils, vegetables, grains, or sauces. Include meals that reuse ingredients across multiple days to reduce waste, but avoid making the meals feel repetitive. Suggest varied formats such as chilli, curries, soups, stews, fried rice, pasta bakes, jacket potatoes, bean tacos, lentil bolognese, frittatas, tray bakes, casseroles, stir-fries, and rice bowls. Meals should be affordable, filling, family-friendly, and realistic for batch cooking or leftovers.",
+
   "Family Friendly":
-    "family-friendly dinners with familiar flavors, mild spice levels, kid-appeal, and flexible components so adults can add heat or extras separately"
+    "family-friendly dinners with familiar flavours, mild to moderate spice levels, flexible components, and broad kid appeal while still encouraging variety beyond plain chicken-based meals. Rotate proteins such as beef mince, turkey, pork, fish, salmon, prawns, eggs, lentils, beans, tofu, sausages, meatballs, halloumi, and occasional chicken. Favour meals that can be customised at the table, such as tacos, wraps, rice bowls, pasta bowls, baked potatoes, flatbreads, noodle bowls, burgers, fajitas, mezze plates, and tray bakes. Keep strong spices, chilli, herbs, sauces, or crunchy toppings optional so adults can add extra flavour separately. Include vegetables in approachable ways, such as roasted, blended into sauces, served as sticks, mixed into rice, added to pasta bakes, or offered as sides. Meals should feel comforting, colourful, balanced, and repeatable without becoming boring."
 };
+
+function mealVarietyRules(days: number, isVegetarian: boolean) {
+  const proteinGuidance = isVegetarian
+    ? `Do not default to cheese, pasta, or mushrooms as the main answer for most meals. Actively rotate legumes, tofu, tempeh, paneer, halloumi, eggs, yogurt, grains, nuts, and seeds.`
+    : `Do not default to chicken as the safest option. Actively rotate between chicken, beef, pork, turkey, fish, seafood, eggs, tofu, beans, lentils, chickpeas, paneer, halloumi, and other protein sources that fit the meal style.`;
+
+  const structureExample = isVegetarian
+    ? "for example three nights of cheese pasta with different herbs"
+    : "for example chicken with rice, chicken pasta, and chicken wraps";
+
+  return `
+Across this meal plan (${days} days), avoid repeating the same main protein anchor more than twice unless impossible while following the meal style.
+${proteinGuidance}
+Vary the cuisine style, cooking method, carb base, and meal format across the days.
+Avoid generating multiple meals that are essentially the same structure (${structureExample}).
+Include a balance of familiar family meals and slightly different options that still feel realistic for home cooking.
+`.trim();
+}
+
+const PROTEIN_VARIETY = [
+  "chicken thighs",
+  "chicken breast",
+  "turkey mince",
+  "lean beef mince",
+  "beef strips",
+  "pork tenderloin",
+  "pork mince",
+  "salmon",
+  "cod",
+  "tuna",
+  "prawns",
+  "eggs",
+  "tofu",
+  "tempeh",
+  "lentils",
+  "chickpeas",
+  "black beans",
+  "kidney beans",
+  "butter beans",
+  "paneer",
+  "halloumi",
+  "Greek yogurt",
+  "cottage cheese"
+];
+
+const PLANT_FORWARD_PROTEIN_ANCHORS = [
+  "lentils",
+  "chickpeas",
+  "black beans",
+  "kidney beans",
+  "butter beans",
+  "tofu",
+  "tempeh",
+  "paneer",
+  "halloumi",
+  "eggs",
+  "Greek yogurt",
+  "cottage cheese",
+  "nuts/seeds",
+  "quinoa"
+];
 
 const MAX_HISTORY_TITLES = Number(process.env.LLM_MAX_HISTORY_TITLES || 15);
 const MAX_FAVOURITE_TITLES = Number(process.env.LLM_MAX_FAVOURITE_TITLES || 10);
@@ -26,19 +94,23 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { people, days, type, useFavourites } = body;
 
-    const [favouriteRecipes, pastRecipes] = await Promise.all([
+    const [favouriteRecipes, pastRecipeTitles] = await Promise.all([
       useFavourites
-        ? prisma.recipe.findMany({
-            where: { isFavourite: true },
-            select: { title: true }
-          })
+        ? prisma.recipe
+            .findMany({
+              where: { isFavourite: true },
+              select: { title: true }
+            })
+            .catch((e) => {
+              console.warn(
+                "[meal-plan/generate] Could not load favourites (DB unavailable or permission denied).",
+                e
+              );
+              return [] as { title: string }[];
+            })
         : Promise.resolve([]),
-      prisma.recipe.findMany({
-        where: { isGenerated: true },
-        select: { title: true }
-      })
+      getRecentRecipeTitlesFromPlans()
     ]);
-    const pastRecipeTitles = pastRecipes.map(r => r.title);
 
     const typeDescription = MEAL_TYPES[type] || type;
     const favouriteContext = favouriteRecipes.length > 0
@@ -49,10 +121,20 @@ export async function POST(request: NextRequest) {
       : '';
     
     const avoidContext = pastRecipeTitles.length > 0
-      ? `\nAvoid repeating these past recipe titles: ${pastRecipeTitles.slice(0, MAX_HISTORY_TITLES).join(", ")}`
+      ? `\nAvoid repeating these recipe titles from meals in the last 30 days: ${pastRecipeTitles.slice(0, MAX_HISTORY_TITLES).join(", ")}`
       : '';
 
+    const proteinRotationContext =
+      type === "Vegetarian"
+        ? `\nRotate distinct plant- and dairy-forward protein anchors across recipes (no meat or fish), drawing from: ${PLANT_FORWARD_PROTEIN_ANCHORS.join(", ")}.`
+        : `\nPrefer rotating distinct main protein anchors across recipes from: ${PROTEIN_VARIETY.join(", ")}.`;
+
     const prompt = `Create ${days} unique dinner recipes for ${people} people.
+
+Variety and repetition:
+${mealVarietyRules(days, type === "Vegetarian")}
+${proteinRotationContext}
+
 Meal style: ${typeDescription}.${favouriteContext}${avoidContext}
 
 Output strict JSON only with:
@@ -129,42 +211,43 @@ Rules:
                       throw new Error("No recipes generated");
                     }
 
-                    const completePlan = await prisma.$transaction(async (tx) => {
-                      const mealPlan = await tx.mealPlan.create({
-                        data: { days, people, type }
-                      });
+                    const mealPlanId = randomUUID();
+                    const createdAt = new Date();
+                    const meals = [];
 
-                      const createdRecipes = [];
-                      for (let i = 0; i < recipes.length; i++) {
-                        const recipeData = recipes[i];
-                        const recipe = await tx.recipe.create({
-                          data: {
-                            title: recipeData.title,
-                            ingredients: recipeData.ingredients,
-                            steps: recipeData.steps,
-                            prepTime: recipeData.prepTime,
-                            cookTime: recipeData.cookTime,
-                            servings: recipeData.servings || people,
-                            isGenerated: true,
-                            isFavourite: false
-                          }
-                        });
-                        createdRecipes.push(recipe);
-                      }
-
-                      await tx.meal.createMany({
-                        data: createdRecipes.map((recipe, i) => ({
-                          recipeId: recipe.id,
-                          dayNumber: i + 1,
-                          mealPlanId: mealPlan.id
-                        }))
+                    for (let i = 0; i < recipes.length; i++) {
+                      const recipeData = recipes[i];
+                      const recipeId = randomUUID();
+                      const recipe = {
+                        id: recipeId,
+                        title: recipeData.title,
+                        ingredients: recipeData.ingredients,
+                        steps: recipeData.steps,
+                        prepTime: recipeData.prepTime,
+                        cookTime: recipeData.cookTime,
+                        servings: recipeData.servings || people,
+                        isGenerated: true,
+                        isFavourite: false,
+                        createdAt
+                      };
+                      meals.push({
+                        id: randomUUID(),
+                        recipeId,
+                        dayNumber: i + 1,
+                        mealPlanId,
+                        recipe
                       });
+                    }
 
-                      return tx.mealPlan.findUnique({
-                        where: { id: mealPlan.id },
-                        include: { meals: { include: { recipe: true }, orderBy: { dayNumber: 'asc' } } }
-                      });
-                    });
+                    const completePlan = {
+                      id: mealPlanId,
+                      days,
+                      people,
+                      type,
+                      isSaved: false,
+                      createdAt,
+                      meals
+                    };
 
                     const finalData = JSON.stringify({
                       status: 'completed',
