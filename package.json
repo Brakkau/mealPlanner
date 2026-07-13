@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
-    "postinstall": "yarn prisma:generate",
+    "postinstall": "prisma generate",
     "docker:up:containerdb": "docker compose --profile container-db up -d --build",
     "docker:up:hostdb": "docker compose --profile host-db up -d --build",
     "docker:down": "docker compose down",
