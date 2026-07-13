@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, Calendar, ShoppingCart, BookOpen, Heart, History, ChefHat } from "lucide-react";
 import ChangelogModal from "./changelog-modal";
+import TokenUsageBadge from "./token-usage-badge";
 
 const navItems = [
   { href: "/", icon: Home, label: "Home" },
@@ -36,6 +37,7 @@ export default function Navigation() {
               <span className="text-xs px-2 py-1 rounded-md bg-gray-100 text-gray-600 font-mono">
                 {runtimeLabel} v{buildVersion}
               </span>
+              <TokenUsageBadge />
               <ChangelogModal />
             </div>
             <div className="flex items-center gap-2">
@@ -74,6 +76,7 @@ export default function Navigation() {
           <span className="text-[10px] px-2 py-1 rounded-md bg-gray-100 text-gray-600 font-mono">
             {runtimeLabel} v{buildVersion}
           </span>
+          <TokenUsageBadge />
           <ChangelogModal />
         </div>
       </header>

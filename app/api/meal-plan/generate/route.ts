@@ -4,6 +4,12 @@ import { NextRequest } from "next/server";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import { getRecentRecipeTitlesFromPlans } from "@/lib/meal-plan-history";
+import {
+  estimateUsageFromTexts,
+  recordLlmUsage,
+  usageFromProviderPayload,
+  type LlmTokenUsage
+} from "@/lib/llm-usage";
 
 const MEAL_TYPES: Record<string, string> = {
   Quick:
@@ -89,6 +95,68 @@ const PLANT_FORWARD_PROTEIN_ANCHORS = [
 const MAX_HISTORY_TITLES = Number(process.env.LLM_MAX_HISTORY_TITLES || 15);
 const MAX_FAVOURITE_TITLES = Number(process.env.LLM_MAX_FAVOURITE_TITLES || 10);
 
+function resolveMaxTokens(days: number): number {
+  const fromEnv = Number(process.env.LLM_MAX_TOKENS);
+  if (Number.isFinite(fromEnv) && fromEnv > 0) return fromEnv;
+  // 7 full recipes routinely exceed the old 2800 default and truncate mid-JSON.
+  return Math.min(16000, Math.max(4000, days * 1000 + 500));
+}
+
+function parseRecipesPayload(raw: string): { recipes: unknown[] } {
+  let text = raw.trim();
+  if (!text) {
+    throw new Error("Empty LLM response");
+  }
+
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenceMatch?.[1]) {
+    text = fenceMatch[1].trim();
+  }
+
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error("No JSON object in LLM response");
+  }
+
+  const parsed: unknown = JSON.parse(text.slice(start, end + 1));
+  if (
+    parsed === null ||
+    typeof parsed !== "object" ||
+    !("recipes" in parsed) ||
+    !Array.isArray((parsed as { recipes: unknown }).recipes)
+  ) {
+    throw new Error("LLM response missing recipes array");
+  }
+
+  return parsed as { recipes: unknown[] };
+}
+
+function processSseChunk(
+  chunk: string,
+  buffer: { value: string },
+  usage: { current: LlmTokenUsage | null },
+  onProgress: () => void
+): boolean {
+  if (chunk === "[DONE]") return true;
+
+  try {
+    const parsed = JSON.parse(chunk);
+    const providerUsage = usageFromProviderPayload(parsed.usage);
+    if (providerUsage) {
+      usage.current = providerUsage;
+    }
+    const content = parsed.choices?.[0]?.delta?.content || "";
+    if (content) {
+      buffer.value += content;
+      onProgress();
+    }
+  } catch {
+    // Skip invalid JSON chunks
+  }
+  return false;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -166,6 +234,7 @@ Rules:
             throw new Error("ABACUSAI_API_KEY is missing");
           }
           const model = process.env.LLM_MODEL?.trim() || "gpt-4o-mini";
+          const maxTokens = resolveMaxTokens(days);
 
           const response = await fetch('https://apps.abacus.ai/v1/chat/completions', {
             method: 'POST',
@@ -177,8 +246,9 @@ Rules:
               model,
               messages: [{ role: 'user', content: prompt }],
               stream: true,
-              max_tokens: Number(process.env.LLM_MAX_TOKENS || 2800),
-              response_format: { type: "json_object" }
+              max_tokens: maxTokens,
+              response_format: { type: "json_object" },
+              stream_options: { include_usage: true }
             })
           });
 
@@ -189,91 +259,142 @@ Rules:
 
           const reader = response.body?.getReader();
           const decoder = new TextDecoder();
-          let buffer = '';
-          let partialRead = '';
+          const buffer = { value: "" };
+          const usage = { current: null as LlmTokenUsage | null };
+          let partialRead = "";
+
+          const sendProgress = () => {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({ status: "processing", message: "Generating recipes..." })}\n\n`
+              )
+            );
+          };
+
+          const finishFromBuffer = async () => {
+            try {
+              const parsed = parseRecipesPayload(buffer.value);
+              const recipes = parsed.recipes.slice(0, days) as Array<{
+                title: string;
+                ingredients: unknown;
+                steps: unknown;
+                prepTime: number;
+                cookTime: number;
+                servings?: number;
+              }>;
+              if (!recipes.length) {
+                throw new Error("No recipes generated");
+              }
+
+              const resolvedUsage =
+                usage.current ??
+                estimateUsageFromTexts(prompt, buffer.value);
+              const monthlyUsage = await recordLlmUsage({
+                tokens: resolvedUsage.totalTokens,
+                source: "meal-plan/generate"
+              });
+
+              const mealPlanId = randomUUID();
+              const createdAt = new Date();
+              const meals = [];
+
+              for (let i = 0; i < recipes.length; i++) {
+                const recipeData = recipes[i];
+                const recipeId = randomUUID();
+                const recipe = {
+                  id: recipeId,
+                  title: recipeData.title,
+                  ingredients: recipeData.ingredients,
+                  steps: recipeData.steps,
+                  prepTime: recipeData.prepTime,
+                  cookTime: recipeData.cookTime,
+                  servings: recipeData.servings || people,
+                  isGenerated: true,
+                  isFavourite: false,
+                  createdAt
+                };
+                meals.push({
+                  id: randomUUID(),
+                  recipeId,
+                  dayNumber: i + 1,
+                  mealPlanId,
+                  recipe
+                });
+              }
+
+              const completePlan = {
+                id: mealPlanId,
+                days,
+                people,
+                type,
+                isSaved: false,
+                createdAt,
+                meals
+              };
+
+              const finalData = JSON.stringify({
+                status: "completed",
+                mealPlan: completePlan,
+                tokenUsage: {
+                  ...resolvedUsage,
+                  monthly: monthlyUsage
+                }
+              });
+              controller.enqueue(encoder.encode(`data: ${finalData}\n\n`));
+            } catch (e) {
+              const detail = e instanceof Error ? e.message : "Unknown parse error";
+              console.error("[meal-plan/generate] Failed to parse recipes:", detail, {
+                bufferLength: buffer.value.length,
+                bufferPreview: buffer.value.slice(0, 400)
+              });
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    status: "error",
+                    message: `Failed to parse recipes: ${detail}`
+                  })}\n\n`
+                )
+              );
+            }
+          };
 
           while (true) {
             const { done, value } = await reader!.read();
             if (done) break;
 
             partialRead += decoder.decode(value, { stream: true });
-            let lines = partialRead.split('\n');
-            partialRead = lines.pop() || '';
+            const lines = partialRead.split("\n");
+            partialRead = lines.pop() || "";
 
             for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6);
-                if (data === '[DONE]') {
-                  try {
-                    const parsed = JSON.parse(buffer);
-                    const recipes = (parsed.recipes || []).slice(0, days);
-                    if (!recipes.length) {
-                      throw new Error("No recipes generated");
-                    }
-
-                    const mealPlanId = randomUUID();
-                    const createdAt = new Date();
-                    const meals = [];
-
-                    for (let i = 0; i < recipes.length; i++) {
-                      const recipeData = recipes[i];
-                      const recipeId = randomUUID();
-                      const recipe = {
-                        id: recipeId,
-                        title: recipeData.title,
-                        ingredients: recipeData.ingredients,
-                        steps: recipeData.steps,
-                        prepTime: recipeData.prepTime,
-                        cookTime: recipeData.cookTime,
-                        servings: recipeData.servings || people,
-                        isGenerated: true,
-                        isFavourite: false,
-                        createdAt
-                      };
-                      meals.push({
-                        id: randomUUID(),
-                        recipeId,
-                        dayNumber: i + 1,
-                        mealPlanId,
-                        recipe
-                      });
-                    }
-
-                    const completePlan = {
-                      id: mealPlanId,
-                      days,
-                      people,
-                      type,
-                      isSaved: false,
-                      createdAt,
-                      meals
-                    };
-
-                    const finalData = JSON.stringify({
-                      status: 'completed',
-                      mealPlan: completePlan
-                    });
-                    controller.enqueue(encoder.encode(`data: ${finalData}\n\n`));
-                  } catch (e) {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: 'error', message: 'Failed to parse recipes' })}\n\n`));
-                  }
-                  return;
-                }
-
-                try {
-                  const parsed = JSON.parse(data);
-                  const content = parsed.choices?.[0]?.delta?.content || '';
-                  buffer += content;
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: 'processing', message: 'Generating recipes...' })}\n\n`));
-                } catch (e) {
-                  // Skip invalid JSON
-                }
+              if (!line.startsWith("data: ")) continue;
+              const data = line.slice(6).trim();
+              if (processSseChunk(data, buffer, usage, sendProgress)) {
+                await finishFromBuffer();
+                return;
               }
             }
           }
+
+          // Flush any trailing SSE line that arrived without a final newline.
+          if (partialRead.startsWith("data: ")) {
+            const data = partialRead.slice(6).trim();
+            if (processSseChunk(data, buffer, usage, sendProgress)) {
+              await finishFromBuffer();
+              return;
+            }
+          }
+
+          if (buffer.value.trim()) {
+            await finishFromBuffer();
+          } else {
+            throw new Error("LLM stream ended with no content");
+          }
         } catch (error) {
           console.error('Stream error:', error);
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: 'error', message: 'Generation failed' })}\n\n`));
+          const message =
+            error instanceof Error ? error.message : "Generation failed";
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: 'error', message })}\n\n`));
         } finally {
           controller.close();
         }

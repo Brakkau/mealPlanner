@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChefHat, Users, Calendar, Utensils, Star, Loader2 } from "lucide-react";
 import { useAppContext } from "@/lib/context";
+import { formatTokenCount } from "@/lib/llm-usage-utils";
 
 const MEAL_TYPES = [
   "Quick",
@@ -17,7 +18,7 @@ const MEAL_TYPES = [
 export default function HomePage() {
   const router = useRouter();
   const { setCurrentMealPlan, clearShoppingList } = useAppContext();
-  
+
   const [people, setPeople] = useState(4);
   const [days, setDays] = useState(7);
   const [mealType, setMealType] = useState("Family Friendly");
@@ -25,16 +26,22 @@ export default function HomePage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState("");
+  const [lastTokenUsage, setLastTokenUsage] = useState<{
+    totalTokens: number;
+    estimated: boolean;
+    monthlyRemaining?: number;
+  } | null>(null);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
     setProgress(0);
     setStatusMessage("Generating recipes with AI...");
+    setLastTokenUsage(null);
 
     try {
-      const response = await fetch('/api/meal-plan/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/meal-plan/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           people,
           days,
@@ -43,46 +50,59 @@ export default function HomePage() {
         })
       });
 
-      if (!response.ok) throw new Error('Generation failed');
+      if (!response.ok) throw new Error("Generation failed");
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-      let partialRead = '';
+      let partialRead = "";
 
       while (true) {
         const { done, value } = await reader!.read();
         if (done) break;
 
         partialRead += decoder.decode(value, { stream: true });
-        let lines = partialRead.split('\n');
-        partialRead = lines.pop() || '';
+        const lines = partialRead.split("\n");
+        partialRead = lines.pop() || "";
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            try {
-              const parsed = JSON.parse(data);
-              if (parsed.status === 'processing') {
-                setProgress(prev => Math.min(prev + 2, 45));
-              } else if (parsed.status === 'completed' && parsed.mealPlan) {
-                setProgress(90);
-                setStatusMessage("Finalizing meal plan...");
-                clearShoppingList();
-                setCurrentMealPlan(parsed.mealPlan);
-                setProgress(100);
-                setStatusMessage("Done! Redirecting...");
-                router.push('/meal-plan');
-                return;
-              } else if (parsed.status === 'error') {
-                throw new Error(parsed.message || 'Generation failed');
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6);
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.status === "processing") {
+              setProgress((prev) => Math.min(prev + 2, 45));
+            } else if (parsed.status === "completed" && parsed.mealPlan) {
+              setProgress(90);
+              if (parsed.tokenUsage?.totalTokens) {
+                setLastTokenUsage({
+                  totalTokens: parsed.tokenUsage.totalTokens,
+                  estimated: Boolean(parsed.tokenUsage.estimated),
+                  monthlyRemaining: parsed.tokenUsage.monthly?.remaining
+                });
               }
-            } catch (e) {}
+              setStatusMessage("Finalizing meal plan...");
+              clearShoppingList();
+              setCurrentMealPlan(parsed.mealPlan);
+              setProgress(100);
+              setStatusMessage("Done! Redirecting...");
+              router.push("/meal-plan");
+              return;
+            } else if (parsed.status === "error") {
+              throw new Error(parsed.message || "Generation failed");
+            }
+          } catch (e) {
+            if (e instanceof SyntaxError) continue;
+            throw e;
           }
         }
       }
     } catch (error) {
-      console.error('Error:', error);
-      alert('Failed to generate meal plan. Please try again.');
+      console.error("Error:", error);
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Failed to generate meal plan. Please try again."
+      );
     } finally {
       setIsGenerating(false);
       setStatusMessage("");
@@ -116,7 +136,7 @@ export default function HomePage() {
           >
             {[...Array(10)].map((_, i) => (
               <option key={i + 1} value={i + 1}>
-                {i + 1} {i === 0 ? 'person' : 'people'}
+                {i + 1} {i === 0 ? "person" : "people"}
               </option>
             ))}
             <option value={12}>10+ people</option>
@@ -135,7 +155,7 @@ export default function HomePage() {
           >
             {[...Array(14)].map((_, i) => (
               <option key={i + 1} value={i + 1}>
-                {i + 1} {i === 0 ? 'day' : 'days'}
+                {i + 1} {i === 0 ? "day" : "days"}
               </option>
             ))}
           </select>
@@ -206,6 +226,16 @@ export default function HomePage() {
               </p>
             )}
           </div>
+        )}
+
+        {lastTokenUsage && (
+          <p className="text-[11px] text-center text-gray-400">
+            Last run used {formatTokenCount(lastTokenUsage.totalTokens)} tokens
+            {lastTokenUsage.estimated ? " (est.)" : ""}
+            {typeof lastTokenUsage.monthlyRemaining === "number"
+              ? ` · ${formatTokenCount(lastTokenUsage.monthlyRemaining)} left this month`
+              : ""}
+          </p>
         )}
       </div>
     </div>

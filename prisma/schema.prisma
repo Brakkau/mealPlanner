@@ -43,3 +43,12 @@ model Meal {
   mealPlanId String
   isCooked   Boolean  @default(false)
 }
+
+model LlmUsageMonth {
+  id           String   @id @default(uuid())
+  monthKey     String   @unique
+  tokensUsed   Int      @default(0)
+  requestCount Int      @default(0)
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+}
