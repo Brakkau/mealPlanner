@@ -4,9 +4,18 @@ export interface ChangelogEntry {
   changes: string[];
 }
 
-export const APP_VERSION = "1.5.0";
+export const APP_VERSION = "1.6.0";
 
 export const changelog: ChangelogEntry[] = [
+  {
+    version: "1.6.0",
+    date: "9 Aug 2026",
+    changes: [
+      "Switched the app database to Supabase Postgres (transaction + session pooler)",
+      "Configured Supabase Storage (S3-compatible) for recipe image uploads via the mealRecipies bucket",
+      "Environment setup updated for Hostinger-friendly pooler connections and Supabase API keys"
+    ]
+  },
   {
     version: "1.5.0",
     date: "11 May 2026",

@@ -29,7 +29,12 @@ export async function getFileUrl(
   isPublic: boolean = false
 ): Promise<string> {
   if (isPublic) {
-    const region = process.env.AWS_REGION || "us-east-1";
+    const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/$/, "");
+    if (supabaseUrl) {
+      return `${supabaseUrl}/storage/v1/object/public/${bucketName}/${cloud_storage_path}`;
+    }
+
+    const region = process.env.AWS_REGION || "eu-central-1";
     return `https://${bucketName}.s3.${region}.amazonaws.com/${cloud_storage_path}`;
   }
   
