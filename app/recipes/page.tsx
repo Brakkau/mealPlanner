@@ -11,6 +11,7 @@ export default function RecipesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState('');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedRecipes, setSelectedRecipes] = useState<string[]>([]);
   const [isCreatingPlan, setIsCreatingPlan] = useState(false);
@@ -34,58 +35,115 @@ export default function RecipesPage() {
     }
   };
 
+  const processImage = async (
+    file: File,
+    index: number,
+    total: number
+  ): Promise<Recipe | null> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch('/api/recipes/upload-image', {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) throw new Error(`Upload failed for ${file.name}`);
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('No response stream');
+
+    const decoder = new TextDecoder();
+    let partialRead = '';
+    let recipe: Recipe | null = null;
+    const baseProgress = (index / total) * 100;
+    const segmentSize = 100 / total;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      partialRead += decoder.decode(value, { stream: true });
+      let lines = partialRead.split('\n');
+      partialRead = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+
+        let parsed: {
+          status?: string;
+          recipe?: Recipe;
+          message?: string;
+        };
+
+        try {
+          parsed = JSON.parse(line.slice(6));
+        } catch {
+          continue;
+        }
+
+        if (parsed.status === 'processing') {
+          setUploadProgress((prev) =>
+            Math.min(prev + segmentSize * 0.03, baseProgress + segmentSize * 0.95)
+          );
+        } else if (parsed.status === 'completed' && parsed.recipe) {
+          recipe = parsed.recipe;
+          setUploadProgress(baseProgress + segmentSize);
+        } else if (parsed.status === 'error') {
+          throw new Error(parsed.message || `Failed to process ${file.name}`);
+        }
+      }
+    }
+
+    return recipe;
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target?.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target?.files ?? []);
+    if (files.length === 0) return;
 
     setIsUploading(true);
     setUploadProgress(0);
+    setUploadStatus('');
     setShowUploadModal(false);
 
+    const failedFiles: string[] = [];
+
     try {
-      const formData = new FormData();
-      formData.append('file', file);
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        setUploadStatus(
+          files.length === 1
+            ? 'Processing image...'
+            : `Processing image ${i + 1} of ${files.length}...`
+        );
 
-      const response = await fetch('/api/recipes/upload-image', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!response.ok) throw new Error('Upload failed');
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let partialRead = '';
-
-      while (true) {
-        const { done, value } = await reader!.read();
-        if (done) break;
-
-        partialRead += decoder.decode(value, { stream: true });
-        let lines = partialRead.split('\n');
-        partialRead = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const parsed = JSON.parse(line.slice(6));
-              if (parsed.status === 'processing') {
-                setUploadProgress(prev => Math.min(prev + 3, 95));
-              } else if (parsed.status === 'completed' && parsed.recipe) {
-                setRecipes(prev => [parsed.recipe, ...prev]);
-                setUploadProgress(100);
-              } else if (parsed.status === 'error') {
-                throw new Error(parsed.message);
-              }
-            } catch (e) {}
+        try {
+          const recipe = await processImage(file, i, files.length);
+          if (recipe) {
+            setRecipes((prev) => [recipe, ...prev]);
+          } else {
+            failedFiles.push(file.name);
           }
+        } catch (error) {
+          console.error(`Error processing ${file.name}:`, error);
+          failedFiles.push(file.name);
         }
       }
-    } catch (error) {
-      console.error('Error:', error);
-      alert('Failed to process image. Please try again.');
+
+      setUploadProgress(100);
+
+      if (failedFiles.length > 0) {
+        const successCount = files.length - failedFiles.length;
+        alert(
+          successCount > 0
+            ? `${successCount} recipe${successCount === 1 ? '' : 's'} uploaded. Failed: ${failedFiles.join(', ')}`
+            : 'Failed to process images. Please try again.'
+        );
+      }
     } finally {
       setIsUploading(false);
+      setUploadStatus('');
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -190,7 +248,9 @@ export default function RecipesPage() {
           <div className="flex items-center gap-3">
             <Loader2 className="animate-spin text-green-600" size={24} />
             <div className="flex-1">
-              <p className="font-medium text-green-800">Processing image...</p>
+              <p className="font-medium text-green-800">
+                {uploadStatus || 'Processing image...'}
+              </p>
               <div className="w-full bg-green-200 rounded-full h-2 mt-2">
                 <div
                   className="bg-green-500 h-2 rounded-full transition-all duration-300"
@@ -276,7 +336,7 @@ export default function RecipesPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="card max-w-md w-full">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Upload Recipe Image</h3>
+              <h3 className="text-lg font-semibold">Upload Recipe Images</h3>
               <button
                 onClick={() => setShowUploadModal(false)}
                 className="p-2 hover:bg-gray-100 rounded-lg"
@@ -285,21 +345,22 @@ export default function RecipesPage() {
               </button>
             </div>
             <p className="text-gray-500 text-sm mb-6">
-              Upload a photo of a recipe from a cookbook, website, or handwritten note. 
-              AI will extract all the details automatically.
+              Upload one or more photos of recipes from a cookbook, website, or handwritten note.
+              AI will extract the details from each image, one at a time.
             </p>
             <label className="block w-full">
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
+                multiple
                 onChange={handleFileUpload}
                 className="hidden"
               />
               <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center cursor-pointer hover:border-green-500 hover:bg-green-50 transition-all duration-200">
                 <ImageIcon className="mx-auto text-gray-400 mb-3" size={40} />
-                <p className="font-medium text-gray-700">Click to upload image</p>
-                <p className="text-sm text-gray-500 mt-1">JPG, PNG or WEBP</p>
+                <p className="font-medium text-gray-700">Click to upload images</p>
+                <p className="text-sm text-gray-500 mt-1">JPG, PNG or WEBP — select multiple</p>
               </div>
             </label>
           </div>

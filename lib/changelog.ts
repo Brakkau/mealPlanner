@@ -4,9 +4,18 @@ export interface ChangelogEntry {
   changes: string[];
 }
 
-export const APP_VERSION = "1.6.0";
+export const APP_VERSION = "1.7.0";
 
 export const changelog: ChangelogEntry[] = [
+  {
+    version: "1.7.0",
+    date: "9 Aug 2026",
+    changes: [
+      "Upload multiple recipe images at once — each photo is processed one at a time with AI OCR",
+      "Progress shows which image is being processed (e.g. 2 of 5) across the full batch",
+      "Partial failures are reported clearly so successful recipes still appear in your library"
+    ]
+  },
   {
     version: "1.6.0",
     date: "9 Aug 2026",
