@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 
 type RecipeInput = {
+  id?: string;
   title: string;
   ingredients: unknown;
   steps: unknown;
@@ -11,6 +12,7 @@ type RecipeInput = {
   cookTime: number;
   servings: number;
   isFavourite?: boolean;
+  isGenerated?: boolean;
 };
 
 type MealInput = {
@@ -59,22 +61,35 @@ export async function POST(request: NextRequest) {
 
           for (const meal of mealPlan.meals) {
             const r = meal.recipe;
-            const recipe = await tx.recipe.create({
-              data: {
-                title: r.title,
-                ingredients: r.ingredients as object,
-                steps: r.steps as object,
-                prepTime: r.prepTime,
-                cookTime: r.cookTime,
-                servings: r.servings || mealPlan.people,
-                isGenerated: true,
-                isFavourite: r.isFavourite ?? false
-              }
-            });
+            const existingRecipeId = r.id
+              ? (
+                  await tx.recipe.findUnique({
+                    where: { id: r.id },
+                    select: { id: true }
+                  })
+                )?.id
+              : null;
+
+            const recipeId =
+              existingRecipeId ??
+              (
+                await tx.recipe.create({
+                  data: {
+                    title: r.title,
+                    ingredients: r.ingredients as object,
+                    steps: r.steps as object,
+                    prepTime: r.prepTime,
+                    cookTime: r.cookTime,
+                    servings: r.servings || mealPlan.people,
+                    isGenerated: r.isGenerated ?? true,
+                    isFavourite: r.isFavourite ?? false
+                  }
+                })
+              ).id;
 
             await tx.meal.create({
               data: {
-                recipeId: recipe.id,
+                recipeId,
                 mealPlanId: mp.id,
                 dayNumber: meal.dayNumber
               }

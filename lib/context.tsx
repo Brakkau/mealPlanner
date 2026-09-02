@@ -1,7 +1,8 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { MealPlan, ShoppingItem, Ingredient } from './types';
+import { MealPlan, ShoppingItem } from './types';
+import { aggregateIngredients } from './shopping-list';
 
 interface AppContextType {
   currentMealPlan: MealPlan | null;
@@ -13,42 +14,6 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
-
-function aggregateIngredients(mealPlan: MealPlan, targetPeople: number): ShoppingItem[] {
-  const ingredientMap = new Map<string, ShoppingItem>();
-
-  mealPlan?.meals?.forEach(meal => {
-    const recipe = meal?.recipe;
-    const ingredients = (recipe?.ingredients as Ingredient[]) || [];
-    const servings = recipe?.servings || 4;
-    const scaleFactor = targetPeople / servings;
-
-    ingredients.forEach(ing => {
-      const key = `${ing?.name?.toLowerCase?.() ?? ''}-${ing?.unit?.toLowerCase?.() ?? ''}`;
-      const scaledQuantity = (ing?.quantity || 0) * scaleFactor;
-
-      if (ingredientMap.has(key)) {
-        const existing = ingredientMap.get(key)!;
-        existing.quantity += scaledQuantity;
-      } else {
-        ingredientMap.set(key, {
-          name: ing?.name ?? '',
-          quantity: scaledQuantity,
-          unit: ing?.unit ?? '',
-          category: ing?.category ?? 'Other',
-          checked: false
-        });
-      }
-    });
-  });
-
-  return Array.from(ingredientMap.values()).sort((a, b) => {
-    if (a.category !== b.category) {
-      return a.category.localeCompare(b.category);
-    }
-    return a.name.localeCompare(b.name);
-  });
-}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [currentMealPlan, setCurrentMealPlan] = useState<MealPlan | null>(null);

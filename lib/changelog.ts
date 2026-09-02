@@ -4,9 +4,27 @@ export interface ChangelogEntry {
   changes: string[];
 }
 
-export const APP_VERSION = "1.7.0";
+export const APP_VERSION = "1.9.0";
 
 export const changelog: ChangelogEntry[] = [
+  {
+    version: "1.9.0",
+    date: "2 Sep 2026",
+    changes: [
+      "Schedule a weekly meal plan email with your chosen type, people, days, and focus",
+      "At the set time the app builds the plan, emails a link, and includes the shopping list",
+      "Open the emailed link to view meals and save the plan as current"
+    ]
+  },
+  {
+    version: "1.8.0",
+    date: "2 Sep 2026",
+    changes: [
+      "Optional weekly focus stacks on your meal type (for example Family Friendly plus Meat, Quick, Vegetarian, or Pasta)",
+      "Family Friendly plans are written for a real family week: table customising, mixed formats, and less defaulting to chicken or pasta every night",
+      "Favourites Only builds a plan from your saved favourites with no AI; if you do not have enough, you can fill the remaining days with AI"
+    ]
+  },
   {
     version: "1.7.0",
     date: "9 Aug 2026",

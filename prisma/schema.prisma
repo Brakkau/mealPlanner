@@ -52,3 +52,23 @@ model LlmUsageMonth {
   updatedAt    DateTime @updatedAt
   createdAt    DateTime @default(now())
 }
+
+model MealPlanSchedule {
+  id                  String    @id @default(uuid())
+  email               String
+  weekday             Int
+  timeLocal           String
+  timeZone            String    @default("Europe/London")
+  enabled             Boolean   @default(true)
+  people              Int
+  days                Int
+  type                String
+  focus               String?
+  useFavourites       Boolean   @default(false)
+  fillRemainingWithAi Boolean   @default(true)
+  nextRunAt           DateTime
+  lastRunAt           DateTime?
+  lastError           String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}

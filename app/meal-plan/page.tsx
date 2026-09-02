@@ -65,7 +65,56 @@ export default function MealPlanPage() {
         )
       });
 
-      if (!response.ok) throw new Error('Swap failed');
+      const contentType = response.headers.get('content-type') ?? '';
+
+      if (!response.ok) {
+        if (contentType.includes('application/json')) {
+          const data: unknown = await response.json();
+          const message =
+            data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
+              ? data.error
+              : 'Swap failed';
+          throw new Error(message);
+        }
+        throw new Error('Swap failed');
+      }
+
+      const applyMeal = (updatedMeal: (typeof currentMealPlan.meals)[number]) => {
+        const updatedPlan = {
+          ...currentMealPlan,
+          meals: currentMealPlan.meals.map((m) =>
+            m.id === mealId ? updatedMeal : m
+          )
+        };
+        setCurrentMealPlan(updatedPlan);
+        if (currentMealPlan.isSaved) {
+          generateShoppingList(updatedPlan, currentMealPlan.people);
+        }
+      };
+
+      if (contentType.includes('application/json')) {
+        const parsed: unknown = await response.json();
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          'status' in parsed &&
+          parsed.status === 'completed' &&
+          'meal' in parsed &&
+          parsed.meal
+        ) {
+          applyMeal(parsed.meal as (typeof currentMealPlan.meals)[number]);
+        } else if (
+          parsed &&
+          typeof parsed === 'object' &&
+          'message' in parsed &&
+          typeof parsed.message === 'string'
+        ) {
+          throw new Error(parsed.message);
+        } else {
+          throw new Error('Swap failed');
+        }
+        return;
+      }
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -103,7 +152,11 @@ export default function MealPlanPage() {
       }
     } catch (error) {
       console.error('Error:', error);
-      alert('Failed to swap meal. Please try again.');
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Failed to swap meal. Please try again.'
+      );
     } finally {
       setSwappingMealId(null);
     }

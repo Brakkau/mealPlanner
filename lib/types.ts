@@ -50,4 +50,24 @@ export interface GenerateMealPlanInput {
   days: number;
   type: string;
   useFavourites: boolean;
+  focus?: string | null;
+  fillRemainingWithAi?: boolean;
+}
+
+export interface MealPlanSchedule {
+  id: string;
+  email: string;
+  weekday: number;
+  timeLocal: string;
+  timeZone: string;
+  enabled: boolean;
+  people: number;
+  days: number;
+  type: string;
+  focus: string | null;
+  useFavourites: boolean;
+  fillRemainingWithAi: boolean;
+  nextRunAt: Date;
+  lastRunAt: Date | null;
+  lastError: string | null;
 }

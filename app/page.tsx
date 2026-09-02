@@ -1,19 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChefHat, Users, Calendar, Utensils, Star, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { ChefHat, Users, Calendar, Utensils, Star, Loader2, Sparkles, Clock } from "lucide-react";
 import { useAppContext } from "@/lib/context";
 import { formatTokenCount } from "@/lib/llm-usage-utils";
-
-const MEAL_TYPES = [
-  "Quick",
-  "High Protein",
-  "Vegetarian",
-  "Meat",
-  "Budget",
-  "Family Friendly"
-];
+import {
+  DEFAULT_AI_TYPE,
+  MEAL_TYPE_OPTIONS,
+  getAllowedFocuses,
+  isFavouritesType
+} from "@/lib/meal-types";
 
 export default function HomePage() {
   const router = useRouter();
@@ -21,8 +19,10 @@ export default function HomePage() {
 
   const [people, setPeople] = useState(4);
   const [days, setDays] = useState(7);
-  const [mealType, setMealType] = useState("Family Friendly");
+  const [mealType, setMealType] = useState(DEFAULT_AI_TYPE);
+  const [weeklyFocus, setWeeklyFocus] = useState("");
   const [useFavourites, setUseFavourites] = useState(false);
+  const [favouriteCount, setFavouriteCount] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState("");
@@ -32,10 +32,69 @@ export default function HomePage() {
     monthlyRemaining?: number;
   } | null>(null);
 
-  const handleGenerate = async () => {
+  const favouritesOnly = isFavouritesType(mealType);
+  const focusPrimary = favouritesOnly ? DEFAULT_AI_TYPE : mealType;
+  const allowedFocuses = getAllowedFocuses(focusPrimary);
+  const hasShortfall =
+    favouritesOnly && favouriteCount !== null && favouriteCount > 0 && favouriteCount < days;
+  const hasNoFavourites = favouritesOnly && favouriteCount === 0;
+  const showWeeklyFocus = !favouritesOnly || hasShortfall;
+
+  useEffect(() => {
+    if (!favouritesOnly) {
+      setFavouriteCount(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadFavouriteCount = async () => {
+      try {
+        const response = await fetch("/api/recipes");
+        const data: unknown = await response.json();
+        if (cancelled) return;
+        const recipes = Array.isArray(data) ? data : [];
+        const count = recipes.filter(
+          (recipe: { isFavourite?: boolean }) => recipe.isFavourite
+        ).length;
+        setFavouriteCount(count);
+      } catch (error) {
+        console.error("Error:", error);
+        if (!cancelled) setFavouriteCount(null);
+      }
+    };
+
+    void loadFavouriteCount();
+    return () => {
+      cancelled = true;
+    };
+  }, [favouritesOnly]);
+
+  const handleMealTypeChange = (nextType: string) => {
+    setMealType(nextType);
+    if (isFavouritesType(nextType)) {
+      setUseFavourites(false);
+    }
+    const nextFocusPrimary = isFavouritesType(nextType) ? DEFAULT_AI_TYPE : nextType;
+    const nextAllowed = getAllowedFocuses(nextFocusPrimary);
+    if (weeklyFocus && !nextAllowed.includes(weeklyFocus as (typeof nextAllowed)[number])) {
+      setWeeklyFocus("");
+    }
+  };
+
+  const handleGenerate = async (fillRemainingWithAi = false) => {
+    if (hasNoFavourites) return;
+    if (hasShortfall && !fillRemainingWithAi) return;
+
     setIsGenerating(true);
     setProgress(0);
-    setStatusMessage("Generating recipes with AI...");
+    setStatusMessage(
+      favouritesOnly && !fillRemainingWithAi
+        ? "Picking from your favourites..."
+        : favouritesOnly
+          ? "Picking favourites and generating extra meals..."
+          : "Generating recipes with AI..."
+    );
     setLastTokenUsage(null);
 
     try {
@@ -46,7 +105,9 @@ export default function HomePage() {
           people,
           days,
           type: mealType,
-          useFavourites
+          useFavourites: favouritesOnly ? false : useFavourites,
+          focus: weeklyFocus || null,
+          fillRemainingWithAi
         })
       });
 
@@ -70,7 +131,13 @@ export default function HomePage() {
           try {
             const parsed = JSON.parse(data);
             if (parsed.status === "processing") {
+              if (parsed.message) setStatusMessage(parsed.message);
               setProgress((prev) => Math.min(prev + 2, 45));
+            } else if (parsed.status === "need_fill") {
+              setFavouriteCount(
+                typeof parsed.favouriteCount === "number" ? parsed.favouriteCount : favouriteCount
+              );
+              throw new Error("shortfall");
             } else if (parsed.status === "completed" && parsed.mealPlan) {
               setProgress(90);
               if (parsed.tokenUsage?.totalTokens) {
@@ -98,6 +165,9 @@ export default function HomePage() {
       }
     } catch (error) {
       console.error("Error:", error);
+      if (error instanceof Error && error.message === "shortfall") {
+        return;
+      }
       alert(
         error instanceof Error
           ? error.message
@@ -168,35 +238,108 @@ export default function HomePage() {
           </label>
           <select
             value={mealType}
-            onChange={(e) => setMealType(e.target.value)}
+            onChange={(e) => handleMealTypeChange(e.target.value)}
             className="select-field"
           >
-            {MEAL_TYPES.map((type) => (
-              <option key={type} value={type}>
-                {type}
+            {MEAL_TYPE_OPTIONS.map((type) => (
+              <option key={type.value} value={type.value}>
+                {type.label}
               </option>
             ))}
           </select>
         </div>
 
-        <label className="flex items-center gap-3 p-4 bg-green-50 rounded-xl cursor-pointer hover:bg-green-100 transition-colors">
-          <input
-            type="checkbox"
-            checked={useFavourites}
-            onChange={(e) => setUseFavourites(e.target.checked)}
-            className="w-5 h-5 rounded border-gray-300 text-green-600 focus:ring-green-500"
-          />
-          <div className="flex items-center gap-2">
-            <Star size={18} className="text-green-600" />
-            <span className="text-sm font-medium text-gray-700">
-              Use favourited meals when possible
-            </span>
+        {showWeeklyFocus && (
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <Sparkles size={18} className="text-green-600" />
+              This week&apos;s focus
+            </label>
+            <select
+              value={weeklyFocus}
+              onChange={(e) => setWeeklyFocus(e.target.value)}
+              className="select-field"
+            >
+              <option value="">None</option>
+              {allowedFocuses.map((focus) => (
+                <option key={focus} value={focus}>
+                  {focus}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-2">
+              {hasShortfall
+                ? "Optional. Used for the extra AI meals, which default to Family Friendly."
+                : "Optional. Stacks on the meal type above — for example Family Friendly plus Meat."}
+            </p>
           </div>
-        </label>
+        )}
+
+        {favouritesOnly && favouriteCount !== null && (
+          <p className="text-sm text-gray-600">
+            You have {favouriteCount} favourite {favouriteCount === 1 ? "recipe" : "recipes"}.
+          </p>
+        )}
+
+        {hasNoFavourites && (
+          <p className="text-sm text-amber-800 bg-amber-50 rounded-xl p-3">
+            Add some favourite meals first, then come back to build a plan from them.{" "}
+            <Link href="/favourites" className="font-medium text-green-700 underline">
+              Go to Favourites
+            </Link>
+          </p>
+        )}
+
+        {hasShortfall && (
+          <div className="space-y-3 p-4 bg-amber-50 rounded-xl">
+            <p className="text-sm text-amber-900">
+              You have {favouriteCount} favourites but asked for {days} days.
+            </p>
+            <p className="text-sm text-amber-800">
+              Fill the remaining {days - (favouriteCount ?? 0)}{" "}
+              {(days - (favouriteCount ?? 0)) === 1 ? "meal" : "meals"} with AI, or use fewer days.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                onClick={() => handleGenerate(true)}
+                disabled={isGenerating}
+                className="btn-primary flex-1 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                Fill remaining with AI
+              </button>
+              <button
+                type="button"
+                onClick={() => setDays(favouriteCount ?? days)}
+                disabled={isGenerating}
+                className="btn-secondary flex-1 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                Use {favouriteCount} {(favouriteCount ?? 0) === 1 ? "day" : "days"} instead
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!favouritesOnly && (
+          <label className="flex items-center gap-3 p-4 bg-green-50 rounded-xl cursor-pointer hover:bg-green-100 transition-colors">
+            <input
+              type="checkbox"
+              checked={useFavourites}
+              onChange={(e) => setUseFavourites(e.target.checked)}
+              className="w-5 h-5 rounded border-gray-300 text-green-600 focus:ring-green-500"
+            />
+            <div className="flex items-center gap-2">
+              <Star size={18} className="text-green-600" />
+              <span className="text-sm font-medium text-gray-700">
+                Use favourited meals when possible
+              </span>
+            </div>
+          </label>
+        )}
 
         <button
-          onClick={handleGenerate}
-          disabled={isGenerating}
+          onClick={() => handleGenerate(false)}
+          disabled={isGenerating || hasNoFavourites || hasShortfall}
           className="w-full btn-primary flex items-center justify-center gap-3 py-4 text-lg disabled:opacity-70 disabled:cursor-not-allowed"
         >
           {isGenerating ? (
@@ -237,6 +380,16 @@ export default function HomePage() {
               : ""}
           </p>
         )}
+      </div>
+
+      <div className="mt-6 text-center">
+        <Link
+          href="/schedule"
+          className="inline-flex items-center gap-2 text-sm font-medium text-green-700 hover:text-green-800"
+        >
+          <Clock size={16} />
+          Schedule a weekly email instead
+        </Link>
       </div>
     </div>
   );

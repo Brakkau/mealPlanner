@@ -4,11 +4,18 @@ import { NextRequest } from "next/server";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import { getRecentRecipeTitlesFromPlans } from "@/lib/meal-plan-history";
+import { buildSwapStylePrompt } from "@/lib/meal-types";
+import { pickFavouriteRecipes } from "@/lib/pick-favourite-recipes";
 
 type SnapshotMeal = {
   id: string;
   dayNumber: number;
-  recipe: { title: string };
+  recipeId?: string;
+  recipe: {
+    id?: string;
+    title: string;
+    isFavourite?: boolean;
+  };
 };
 
 type SnapshotPlan = {
@@ -17,6 +24,21 @@ type SnapshotPlan = {
   type: string;
   meals: SnapshotMeal[];
 };
+
+function recipeIdFromMeal(meal: SnapshotMeal): string | undefined {
+  return meal.recipe.id || meal.recipeId;
+}
+
+async function pickUnusedFavourite(usedIds: string[]) {
+  const unused = await prisma.recipe.findMany({
+    where: {
+      isFavourite: true,
+      ...(usedIds.length > 0 ? { id: { notIn: usedIds } } : {})
+    }
+  });
+  if (unused.length === 0) return null;
+  return pickFavouriteRecipes(unused, 1, [])[0] ?? null;
+}
 
 function buildSwapPrompt(
   mealPlan: { people: number; type: string; meals: SnapshotMeal[] },
@@ -27,9 +49,10 @@ function buildSwapPrompt(
     ...mealPlan.meals.map((m) => m.recipe.title),
     ...pastRecipeTitles
   ])].slice(0, 50).join(', ');
+  const style = buildSwapStylePrompt(mealPlan.type);
 
   return `Generate a single new dinner recipe for ${mealPlan.people} people.
-The meal should be ${mealPlan.type}.
+The meal should be ${style}.
 Do NOT suggest any of these existing recipes: ${existingTitles}
 
 Provide:
@@ -73,6 +96,30 @@ export async function POST(request: NextRequest) {
       const meal = mealPlanSnapshot.meals.find((m: { id: string }) => m.id === mealId);
       if (!meal) {
         return Response.json({ error: 'Meal not found' }, { status: 404 });
+      }
+
+      if (meal.recipe.isFavourite) {
+        const usedIds = mealPlanSnapshot.meals
+          .map((item) => recipeIdFromMeal(item))
+          .filter((id): id is string => Boolean(id));
+        const nextFavourite = await pickUnusedFavourite(usedIds);
+        if (!nextFavourite) {
+          return Response.json(
+            { error: "No more favourite meals to swap" },
+            { status: 400 }
+          );
+        }
+
+        return Response.json({
+          status: "completed",
+          meal: {
+            id: mealId,
+            recipeId: nextFavourite.id,
+            dayNumber: meal.dayNumber,
+            mealPlanId,
+            recipe: nextFavourite
+          }
+        });
       }
 
       const pastRecipeTitles = await getRecentRecipeTitlesFromPlans();
@@ -201,6 +248,28 @@ export async function POST(request: NextRequest) {
     const meal = mealPlan.meals.find((m: { id: string }) => m.id === mealId);
     if (!meal) {
       return Response.json({ error: 'Meal not found' }, { status: 404 });
+    }
+
+    if (meal.recipe.isFavourite) {
+      const usedIds = mealPlan.meals.map((item) => item.recipeId);
+      const nextFavourite = await pickUnusedFavourite(usedIds);
+      if (!nextFavourite) {
+        return Response.json(
+          { error: "No more favourite meals to swap" },
+          { status: 400 }
+        );
+      }
+
+      const updatedMeal = await prisma.meal.update({
+        where: { id: mealId },
+        data: { recipeId: nextFavourite.id },
+        include: { recipe: true }
+      });
+
+      return Response.json({
+        status: "completed",
+        meal: updatedMeal
+      });
     }
 
     const pastRecipeTitles = await getRecentRecipeTitlesFromPlans();
