@@ -1,8 +1,11 @@
 import {
   DEFAULT_AI_TYPE,
   FAVOURITES_TYPE,
+  buildGeneratePrompt,
+  buildSwapStylePrompt,
   formatPlanTypeLabel,
   getAllowedFocuses,
+  getCholesterolGuidance,
   isFavouritesType,
   isFocusAllowed,
   isVegetarianStyle,
@@ -78,18 +81,71 @@ describe("formatPlanTypeLabel and parsePlanType", () => {
     expect(parsePlanType("Family Friendly · Meat")).toEqual({
       isFavourites: false,
       styleType: "Family Friendly",
-      focus: "Meat"
+      focus: "Meat",
+      cholesterolFriendly: false
     });
     expect(parsePlanType("Favourites · Family Friendly · Pasta")).toEqual({
       isFavourites: true,
       styleType: "Family Friendly",
-      focus: "Pasta"
+      focus: "Pasta",
+      cholesterolFriendly: false
     });
     expect(parsePlanType("Favourites")).toEqual({
       isFavourites: true,
       styleType: DEFAULT_AI_TYPE,
-      focus: null
+      focus: null,
+      cholesterolFriendly: false
     });
+  });
+
+  it("formats and parses cholesterol-friendly labels", () => {
+    expect(
+      formatPlanTypeLabel({ type: "Family Friendly", cholesterolFriendly: true })
+    ).toBe("Family Friendly · Cholesterol");
+    expect(
+      formatPlanTypeLabel({
+        type: "Family Friendly",
+        focus: "Meat",
+        cholesterolFriendly: true
+      })
+    ).toBe("Family Friendly · Meat · Cholesterol");
+    expect(parsePlanType("Family Friendly · Meat · Cholesterol")).toEqual({
+      isFavourites: false,
+      styleType: "Family Friendly",
+      focus: "Meat",
+      cholesterolFriendly: true
+    });
+    expect(parsePlanType("Favourites · Family Friendly · Cholesterol")).toEqual({
+      isFavourites: true,
+      styleType: "Family Friendly",
+      focus: null,
+      cholesterolFriendly: true
+    });
+  });
+});
+
+describe("cholesterol-friendly generation", () => {
+  it("includes cholesterol-lowering guidance in generate and swap prompts", () => {
+    const prompt = buildGeneratePrompt({
+      people: 4,
+      days: 3,
+      type: "Family Friendly",
+      focus: null,
+      favouriteTitles: [],
+      pastRecipeTitles: [],
+      maxFavouriteTitles: 10,
+      maxHistoryTitles: 15,
+      cholesterolFriendly: true
+    });
+    expect(prompt).toContain(getCholesterolGuidance());
+    expect(prompt).toContain("oily fish");
+    expect(prompt).toContain("Avoid or keep to a rare exception");
+
+    const swap = buildSwapStylePrompt("Family Friendly · Cholesterol");
+    expect(swap).toContain("help lower LDL cholesterol");
+    expect(buildSwapStylePrompt("Family Friendly")).not.toContain(
+      "help lower LDL cholesterol"
+    );
   });
 });
 

@@ -78,7 +78,7 @@ Respond with a JSON object in this exact format:
   }
 }
 
-Category must be one of: Vegetables, Meat, Dairy, Pantry, Frozen, Other
+Category must be one of: Vegetables, Meat, Dairy, Pantry, Frozen, Condiments, Other. Put herbs, spices, oils, vinegars, soy sauce, and stock cubes in Condiments.
 Respond with raw JSON only.`;
 }
 

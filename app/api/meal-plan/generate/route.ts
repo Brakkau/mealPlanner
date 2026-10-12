@@ -22,7 +22,8 @@ export async function POST(request: NextRequest) {
       type,
       useFavourites,
       focus,
-      fillRemainingWithAi
+      fillRemainingWithAi,
+      cholesterolFriendly
     } = body as {
       people: number;
       days: number;
@@ -30,6 +31,7 @@ export async function POST(request: NextRequest) {
       useFavourites?: boolean;
       focus?: string | null;
       fillRemainingWithAi?: boolean;
+      cholesterolFriendly?: boolean;
     };
 
     const encoder = new TextEncoder();
@@ -50,7 +52,8 @@ export async function POST(request: NextRequest) {
               type,
               useFavourites,
               focus,
-              fillRemainingWithAi
+              fillRemainingWithAi,
+              cholesterolFriendly
             },
             sendProgress
           );

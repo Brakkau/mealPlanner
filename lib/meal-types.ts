@@ -1,3 +1,6 @@
+// ============= Imports =============
+import { INGREDIENT_CATEGORIES } from "@/lib/types";
+
 // ============= Types =============
 
 export const FAVOURITES_TYPE = "Favourites";
@@ -14,6 +17,8 @@ export const AI_MEAL_TYPES = [
 
 export const WEEKLY_FOCUSES = ["Quick", "Meat", "Vegetarian", "Pasta"] as const;
 
+export const CHOLESTEROL_LABEL = "Cholesterol";
+
 export type AiMealType = (typeof AI_MEAL_TYPES)[number];
 export type WeeklyFocus = (typeof WEEKLY_FOCUSES)[number];
 
@@ -26,6 +31,7 @@ export interface ParsedPlanType {
   isFavourites: boolean;
   styleType: string;
   focus: string | null;
+  cholesterolFriendly: boolean;
 }
 
 // ============= Constants =============
@@ -93,6 +99,21 @@ const PROTEIN_VARIETY = [
   "halloumi",
   "Greek yogurt",
   "cottage cheese"
+];
+
+const CHOLESTEROL_PROTEIN_ANCHORS = [
+  "oily fish (salmon, mackerel, sardines, trout)",
+  "lentils",
+  "chickpeas",
+  "beans",
+  "tofu",
+  "tempeh",
+  "soya mince",
+  "turkey mince",
+  "skinless chicken",
+  "unsalted nuts",
+  "seeds",
+  "oats/barley"
 ];
 
 const PLANT_FORWARD_PROTEIN_ANCHORS = [
@@ -164,21 +185,31 @@ export function getFocusDescription(focus: string): string | null {
   return FOCUS_DESCRIPTIONS[focus];
 }
 
+export function getCholesterolGuidance(): string {
+  return `Cholesterol-lowering dinners: every meal must follow a heart-healthy pattern to help lower LDL cholesterol. Favour soluble fibre (oats, barley, beans, lentils, chickpeas, vegetables, fruit), oily fish, unsalted nuts and seeds, tofu or soya, extra virgin olive oil or rapeseed oil, and wholegrains. Cook by grilling, baking, steaming, poaching, or air-frying rather than deep-frying. Avoid or keep to a rare exception: butter, ghee, lard, coconut oil, cream, cheese-heavy sauces, pastry, pies, biscuits, sausages, bacon, salami, fatty red meat, processed meat, and takeaway-style fried food. Do not make eggs, cheese, or creamy pasta the default. If this conflicts with the meal type or weekly focus (for example creamy pasta or a sausage night), the cholesterol-lowering rules win. Meals should still be filling, flavourful, and realistic for a UK supermarket shop.`;
+}
+
 export function formatPlanTypeLabel(options: {
   type: string;
   focus?: string | null;
   isFavourites?: boolean;
   fillWithAi?: boolean;
+  cholesterolFriendly?: boolean;
 }): string {
   const focus = options.focus?.trim() || null;
+  const cholesterol = options.cholesterolFriendly ? ` · ${CHOLESTEROL_LABEL}` : "";
   if (options.isFavourites) {
     if (options.fillWithAi) {
       const style = isAiMealType(options.type) ? options.type : DEFAULT_AI_TYPE;
-      return focus ? `${FAVOURITES_TYPE} · ${style} · ${focus}` : `${FAVOURITES_TYPE} · ${style}`;
+      const base = focus
+        ? `${FAVOURITES_TYPE} · ${style} · ${focus}`
+        : `${FAVOURITES_TYPE} · ${style}`;
+      return `${base}${cholesterol}`;
     }
-    return FAVOURITES_TYPE;
+    return `${FAVOURITES_TYPE}${cholesterol}`;
   }
-  return focus ? `${options.type} · ${focus}` : options.type;
+  const base = focus ? `${options.type} · ${focus}` : options.type;
+  return `${base}${cholesterol}`;
 }
 
 export function parsePlanType(stored: string): ParsedPlanType {
@@ -188,8 +219,15 @@ export function parsePlanType(stored: string): ParsedPlanType {
     .filter(Boolean);
 
   if (parts.length === 0) {
-    return { isFavourites: false, styleType: DEFAULT_AI_TYPE, focus: null };
+    return {
+      isFavourites: false,
+      styleType: DEFAULT_AI_TYPE,
+      focus: null,
+      cholesterolFriendly: false
+    };
   }
+
+  const cholesterolFriendly = parts.includes(CHOLESTEROL_LABEL);
 
   if (isFavouritesType(parts[0])) {
     const rest = parts.slice(1);
@@ -199,18 +237,29 @@ export function parsePlanType(stored: string): ParsedPlanType {
       if (isAiMealType(part)) styleType = part;
       else if (isWeeklyFocus(part)) focus = part;
     }
-    return { isFavourites: true, styleType, focus };
+    return { isFavourites: true, styleType, focus, cholesterolFriendly };
   }
 
   const styleType = parts[0];
   const focus = parts.slice(1).find((part) => isWeeklyFocus(part)) ?? null;
-  return { isFavourites: false, styleType, focus };
+  return { isFavourites: false, styleType, focus, cholesterolFriendly };
 }
 
-export function mealVarietyRules(days: number, isVegetarian: boolean): string {
-  const proteinGuidance = isVegetarian
-    ? `Do not default to cheese, pasta, or mushrooms as the main answer for most meals. Actively rotate legumes, tofu, tempeh, paneer, halloumi, eggs, yogurt, grains, nuts, and seeds.`
-    : `Do not default to chicken as the safest option. Actively rotate between chicken, beef, pork, turkey, fish, seafood, eggs, tofu, beans, lentils, chickpeas, paneer, halloumi, and other protein sources that fit the meal style.`;
+export function mealVarietyRules(
+  days: number,
+  isVegetarian: boolean,
+  cholesterolFriendly = false
+): string {
+  let proteinGuidance: string;
+  if (cholesterolFriendly) {
+    proteinGuidance = isVegetarian
+      ? `Do not default to cheese, creamy pasta, or fried food. Actively rotate legumes, tofu, tempeh, soya, oats, nuts, and seeds.`
+      : `Do not default to sausages, processed meat, fatty red meat, or creamy sauces. Actively rotate oily fish, legumes, tofu, turkey, and skinless chicken.`;
+  } else if (isVegetarian) {
+    proteinGuidance = `Do not default to cheese, pasta, or mushrooms as the main answer for most meals. Actively rotate legumes, tofu, tempeh, paneer, halloumi, eggs, yogurt, grains, nuts, and seeds.`;
+  } else {
+    proteinGuidance = `Do not default to chicken as the safest option. Actively rotate between chicken, beef, pork, turkey, fish, seafood, eggs, tofu, beans, lentils, chickpeas, paneer, halloumi, and other protein sources that fit the meal style.`;
+  }
 
   const structureExample = isVegetarian
     ? "for example three nights of cheese pasta with different herbs"
@@ -225,19 +274,29 @@ Include a balance of familiar family meals and slightly different options that s
 `.trim();
 }
 
-export function proteinRotationContext(isVegetarian: boolean): string {
+export function proteinRotationContext(
+  isVegetarian: boolean,
+  cholesterolFriendly = false
+): string {
+  if (cholesterolFriendly) {
+    return isVegetarian
+      ? `For cholesterol-lowering vegetarian meals, rotate legumes, tofu, tempeh, soya, oats, nuts, and seeds. Do not use cheese, cream, pastry, or fried food as the main answer.`
+      : `For cholesterol-lowering meals, rotate distinct protein anchors from: ${CHOLESTEROL_PROTEIN_ANCHORS.join(", ")}. Limit fatty red meat and skip processed meat.`;
+  }
   return isVegetarian
     ? `Rotate distinct plant- and dairy-forward protein anchors across recipes (no meat or fish), drawing from: ${PLANT_FORWARD_PROTEIN_ANCHORS.join(", ")}.`
     : `Prefer rotating distinct main protein anchors across recipes from: ${PROTEIN_VARIETY.join(", ")}.`;
 }
 
-export function buildStylePrompt(type: string, focus: string | null): string {
+export function buildStylePrompt(
+  type: string,
+  focus: string | null,
+  cholesterolFriendly = false
+): string {
   const description = getTypeDescription(type);
   const focusDescription = focus ? getFocusDescription(focus) : null;
-  if (focusDescription) {
-    return `${description} ${focusDescription}`;
-  }
-  return description;
+  const cholesterolDescription = cholesterolFriendly ? getCholesterolGuidance() : null;
+  return [description, focusDescription, cholesterolDescription].filter(Boolean).join(" ");
 }
 
 export function buildGeneratePrompt(input: {
@@ -249,9 +308,19 @@ export function buildGeneratePrompt(input: {
   pastRecipeTitles: string[];
   maxFavouriteTitles: number;
   maxHistoryTitles: number;
+  cholesterolFriendly?: boolean;
 }): string {
-  const { people, days, type, focus, favouriteTitles, pastRecipeTitles, maxFavouriteTitles, maxHistoryTitles } =
-    input;
+  const {
+    people,
+    days,
+    type,
+    focus,
+    favouriteTitles,
+    pastRecipeTitles,
+    maxFavouriteTitles,
+    maxHistoryTitles,
+    cholesterolFriendly = false
+  } = input;
   const vegetarian = isVegetarianStyle(type, focus);
   const favouriteContext =
     favouriteTitles.length > 0
@@ -269,16 +338,16 @@ export function buildGeneratePrompt(input: {
   return `Create ${days} unique dinner recipes for ${people} people.
 
 Variety and repetition:
-${mealVarietyRules(days, vegetarian)}
-${proteinRotationContext(vegetarian)}
+${mealVarietyRules(days, vegetarian, cholesterolFriendly)}
+${proteinRotationContext(vegetarian, cholesterolFriendly)}
 
-Meal style: ${buildStylePrompt(type, focus)}.${favouriteContext}${avoidContext}
+Meal style: ${buildStylePrompt(type, focus, cholesterolFriendly)}.${favouriteContext}${avoidContext}
 
 Output strict JSON only with:
 {
   "recipes": [{
     "title": "string",
-    "ingredients": [{"name":"string","quantity":number,"unit":"g|kg|ml|L|tbsp|tsp","category":"Vegetables|Meat|Dairy|Pantry|Frozen|Other"}],
+    "ingredients": [{"name":"string","quantity":number,"unit":"g|kg|ml|L|tbsp|tsp","category":"${INGREDIENT_CATEGORIES.join("|")}"}],
     "steps": ["4-6 concise cooking steps"],
     "prepTime": number,
     "cookTime": number,
@@ -289,11 +358,13 @@ Output strict JSON only with:
 Rules:
 - Exactly ${days} recipes
 - Metric/British units only (g, kg, ml, L, tbsp, tsp)
+- Put herbs, spices, oils, vinegars, soy sauce, and stock cubes in Condiments
+- Use the same ingredient name for the same product across recipes (for example Passata, Rapeseed oil, Vegetable stock)
 - No markdown or code fences
 - Keep each recipe practical and concise`;
 }
 
 export function buildSwapStylePrompt(storedType: string): string {
   const parsed = parsePlanType(storedType);
-  return buildStylePrompt(parsed.styleType, parsed.focus);
+  return buildStylePrompt(parsed.styleType, parsed.focus, parsed.cholesterolFriendly);
 }

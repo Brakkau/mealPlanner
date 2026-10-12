@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChefHat, Users, Calendar, Utensils, Star, Loader2, Sparkles, Clock } from "lucide-react";
+import { ChefHat, Users, Calendar, Utensils, Star, Loader2, Sparkles, Clock, Activity } from "lucide-react";
 import { useAppContext } from "@/lib/context";
 import { formatTokenCount } from "@/lib/llm-usage-utils";
 import {
@@ -22,6 +22,7 @@ export default function HomePage() {
   const [mealType, setMealType] = useState(DEFAULT_AI_TYPE);
   const [weeklyFocus, setWeeklyFocus] = useState("");
   const [useFavourites, setUseFavourites] = useState(false);
+  const [cholesterolFriendly, setCholesterolFriendly] = useState(false);
   const [favouriteCount, setFavouriteCount] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -39,6 +40,7 @@ export default function HomePage() {
     favouritesOnly && favouriteCount !== null && favouriteCount > 0 && favouriteCount < days;
   const hasNoFavourites = favouritesOnly && favouriteCount === 0;
   const showWeeklyFocus = !favouritesOnly || hasShortfall;
+  const showCholesterolToggle = !favouritesOnly || hasShortfall;
 
   useEffect(() => {
     if (!favouritesOnly) {
@@ -107,7 +109,8 @@ export default function HomePage() {
           type: mealType,
           useFavourites: favouritesOnly ? false : useFavourites,
           focus: weeklyFocus || null,
-          fillRemainingWithAi
+          fillRemainingWithAi,
+          cholesterolFriendly
         })
       });
 
@@ -333,6 +336,26 @@ export default function HomePage() {
               <span className="text-sm font-medium text-gray-700">
                 Use favourited meals when possible
               </span>
+            </div>
+          </label>
+        )}
+
+        {showCholesterolToggle && (
+          <label className="flex items-start gap-3 p-4 bg-green-50 rounded-xl cursor-pointer hover:bg-green-100 transition-colors">
+            <input
+              type="checkbox"
+              checked={cholesterolFriendly}
+              onChange={(e) => setCholesterolFriendly(e.target.checked)}
+              className="w-5 h-5 mt-0.5 rounded border-gray-300 text-green-600 focus:ring-green-500"
+            />
+            <div>
+              <div className="flex items-center gap-2">
+                <Activity size={18} className="text-green-600" />
+                <span className="text-sm font-medium text-gray-700">Cholesterol meals</span>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Generated meals favour foods that help lower cholesterol and avoid those that raise it.
+              </p>
             </div>
           </label>
         )}

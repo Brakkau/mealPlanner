@@ -4,9 +4,34 @@ export interface ChangelogEntry {
   changes: string[];
 }
 
-export const APP_VERSION = "1.9.0";
+export const APP_VERSION = "1.12.0";
 
 export const changelog: ChangelogEntry[] = [
+  {
+    version: "1.12.0",
+    date: "12 Oct 2026",
+    changes: [
+      "Shopping list rounds up whole items and drops the word item, so you see 3 carrots instead of 3 item Carrot",
+      "Condiments show as a cupboard check with no quantities, plus an Already in the cupboard toggle",
+      "Tofu is listed in Pantry, garlic paste stays in Condiments, and garlic cloves stay with the vegetables"
+    ]
+  },
+  {
+    version: "1.11.0",
+    date: "12 Oct 2026",
+    changes: [
+      "Shopping list puts herbs, spices, oils, and similar cupboard staples in a Condiments section",
+      "Nearby ingredients are combined where possible, including passata, oils with mixed spoons, and stock plus stock cubes"
+    ]
+  },
+  {
+    version: "1.10.0",
+    date: "12 Oct 2026",
+    changes: [
+      "Optional Cholesterol meals toggle when creating a plan, so generated dinners follow cholesterol-lowering foods and avoid those that raise it",
+      "Cholesterol-friendly plans keep that style when swapping a meal, and weekly schedules can use the same option"
+    ]
+  },
   {
     version: "1.9.0",
     date: "2 Sep 2026",

@@ -1,4 +1,9 @@
-import { aggregateIngredients, formatShoppingQuantity, groupShoppingItems } from "@/lib/shopping-list";
+import {
+  aggregateIngredients,
+  formatShoppingItemLabel,
+  groupShoppingItems,
+  shoppingCategoryNames
+} from "@/lib/shopping-list";
 import { sendSmtpMail } from "@/lib/smtp";
 import type { MealPlan } from "@/lib/types";
 
@@ -35,20 +40,16 @@ export function buildScheduleEmail(params: {
   const mealLines = (mealPlan.meals ?? []).map(
     (meal) => `Day ${meal.dayNumber}: ${meal.recipe?.title ?? "Untitled"}`
   );
-  const shoppingLines = shopping.map(
-    (item) => `${formatShoppingQuantity(item.quantity)} ${item.unit} ${item.name}`
-  );
+  const shoppingLines = shopping.map((item) => formatShoppingItemLabel(item));
 
-  const shoppingHtml = Object.keys(grouped)
-    .sort()
+  const shoppingHtml = shoppingCategoryNames(grouped)
     .map((category) => {
+      const heading =
+        category === "Condiments" ? "Condiments (check the cupboard)" : category;
       const items = grouped[category]
-        .map(
-          (item) =>
-            `<li>${escapeHtml(formatShoppingQuantity(item.quantity))} ${escapeHtml(item.unit)} ${escapeHtml(item.name)}</li>`
-        )
+        .map((item) => `<li>${escapeHtml(formatShoppingItemLabel(item))}</li>`)
         .join("");
-      return `<h3 style="margin:16px 0 8px;">${escapeHtml(category)}</h3><ul style="margin:0;padding-left:20px;">${items}</ul>`;
+      return `<h3 style="margin:16px 0 8px;">${escapeHtml(heading)}</h3><ul style="margin:0;padding-left:20px;">${items}</ul>`;
     })
     .join("");
 

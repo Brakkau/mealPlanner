@@ -18,6 +18,7 @@ type SchedulePatch = {
   focus?: string | null;
   useFavourites?: boolean;
   fillRemainingWithAi?: boolean;
+  cholesterolFriendly?: boolean;
 };
 
 export async function PATCH(
@@ -65,6 +66,7 @@ export async function PATCH(
         focus: resolveFocus(isFavouritesType(type) ? DEFAULT_AI_TYPE : type, body.focus ?? existing.focus),
         useFavourites: body.useFavourites ?? existing.useFavourites,
         fillRemainingWithAi: body.fillRemainingWithAi ?? existing.fillRemainingWithAi,
+        cholesterolFriendly: body.cholesterolFriendly ?? existing.cholesterolFriendly,
         nextRunAt: getNextRunAt(weekday, timeLocal, timeZone)
       }
     });

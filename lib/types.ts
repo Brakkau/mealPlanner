@@ -1,8 +1,20 @@
+export const INGREDIENT_CATEGORIES = [
+  "Vegetables",
+  "Meat",
+  "Dairy",
+  "Pantry",
+  "Frozen",
+  "Condiments",
+  "Other"
+] as const;
+
+export type IngredientCategory = (typeof INGREDIENT_CATEGORIES)[number];
+
 export interface Ingredient {
   name: string;
   quantity: number;
   unit: string;
-  category: 'Vegetables' | 'Meat' | 'Dairy' | 'Pantry' | 'Frozen' | 'Other';
+  category: IngredientCategory;
 }
 
 export interface Recipe {
@@ -52,6 +64,7 @@ export interface GenerateMealPlanInput {
   useFavourites: boolean;
   focus?: string | null;
   fillRemainingWithAi?: boolean;
+  cholesterolFriendly?: boolean;
 }
 
 export interface MealPlanSchedule {
@@ -67,6 +80,7 @@ export interface MealPlanSchedule {
   focus: string | null;
   useFavourites: boolean;
   fillRemainingWithAi: boolean;
+  cholesterolFriendly: boolean;
   nextRunAt: Date;
   lastRunAt: Date | null;
   lastError: string | null;

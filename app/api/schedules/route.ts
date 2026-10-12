@@ -23,6 +23,7 @@ type ScheduleBody = {
   focus?: string | null;
   useFavourites?: boolean;
   fillRemainingWithAi?: boolean;
+  cholesterolFriendly?: boolean;
 };
 
 function parseScheduleInput(body: ScheduleBody) {
@@ -63,6 +64,7 @@ function parseScheduleInput(body: ScheduleBody) {
     focus,
     useFavourites: Boolean(body.useFavourites),
     fillRemainingWithAi: body.fillRemainingWithAi !== false,
+    cholesterolFriendly: Boolean(body.cholesterolFriendly),
     nextRunAt: getNextRunAt(weekday, timeLocal, timeZone)
   };
 }

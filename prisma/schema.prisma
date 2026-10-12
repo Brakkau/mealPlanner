@@ -66,6 +66,7 @@ model MealPlanSchedule {
   focus               String?
   useFavourites       Boolean   @default(false)
   fillRemainingWithAi Boolean   @default(true)
+  cholesterolFriendly Boolean   @default(false)
   nextRunAt           DateTime
   lastRunAt           DateTime?
   lastError           String?

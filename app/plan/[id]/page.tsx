@@ -7,7 +7,12 @@ import { Calendar, ShoppingCart, Save, Loader2 } from "lucide-react";
 import RecipeCard from "@/components/recipe-card";
 import { useAppContext } from "@/lib/context";
 import { MealPlan } from "@/lib/types";
-import { aggregateIngredients, formatShoppingQuantity, groupShoppingItems } from "@/lib/shopping-list";
+import {
+  aggregateIngredients,
+  formatShoppingItemLabel,
+  groupShoppingItems,
+  shoppingCategoryNames
+} from "@/lib/shopping-list";
 
 const CATEGORY_COLORS: Record<string, string> = {
   Vegetables: "bg-green-100 text-green-700",
@@ -15,6 +20,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   Dairy: "bg-blue-100 text-blue-700",
   Pantry: "bg-amber-100 text-amber-700",
   Frozen: "bg-cyan-100 text-cyan-700",
+  Condiments: "bg-purple-100 text-purple-700",
   Other: "bg-gray-100 text-gray-700"
 };
 
@@ -111,7 +117,7 @@ export default function SharedPlanPage() {
 
   const shopping = aggregateIngredients(plan, plan.people);
   const grouped = groupShoppingItems(shopping);
-  const categories = Object.keys(grouped).sort();
+  const categories = shoppingCategoryNames(grouped);
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -158,7 +164,7 @@ export default function SharedPlanPage() {
             <ul className="mt-3 space-y-2">
               {grouped[category].map((item) => (
                 <li key={`${item.name}-${item.unit}`} className="text-sm text-gray-700">
-                  {formatShoppingQuantity(item.quantity)} {item.unit} {item.name}
+                  {formatShoppingItemLabel(item)}
                 </li>
               ))}
             </ul>

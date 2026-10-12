@@ -10,6 +10,7 @@ import {
   Utensils,
   Sparkles,
   Star,
+  Activity,
   Loader2,
   Trash2,
   Send
@@ -39,6 +40,7 @@ type ScheduleRecord = {
   focus: string | null;
   useFavourites: boolean;
   fillRemainingWithAi: boolean;
+  cholesterolFriendly: boolean;
   nextRunAt: string;
   lastRunAt: string | null;
   lastError: string | null;
@@ -56,6 +58,7 @@ export default function SchedulePage() {
   const [mealType, setMealType] = useState(DEFAULT_AI_TYPE);
   const [weeklyFocus, setWeeklyFocus] = useState("");
   const [useFavourites, setUseFavourites] = useState(false);
+  const [cholesterolFriendly, setCholesterolFriendly] = useState(false);
   const [schedules, setSchedules] = useState<ScheduleRecord[]>([]);
   const [emailConfigured, setEmailConfigured] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
@@ -113,7 +116,8 @@ export default function SchedulePage() {
           type: mealType,
           focus: weeklyFocus || null,
           useFavourites: favouritesOnly ? false : useFavourites,
-          fillRemainingWithAi: true
+          fillRemainingWithAi: true,
+          cholesterolFriendly
         })
       });
       const data: unknown = await response.json();
@@ -354,6 +358,24 @@ export default function SchedulePage() {
           </label>
         )}
 
+        <label className="flex items-start gap-3 p-4 bg-green-50 rounded-xl cursor-pointer">
+          <input
+            type="checkbox"
+            checked={cholesterolFriendly}
+            onChange={(e) => setCholesterolFriendly(e.target.checked)}
+            className="w-5 h-5 mt-0.5 rounded border-gray-300 text-green-600 focus:ring-green-500"
+          />
+          <div>
+            <div className="flex items-center gap-2">
+              <Activity size={18} className="text-green-600" />
+              <span className="text-sm font-medium text-gray-700">Cholesterol meals</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Generated meals favour foods that help lower cholesterol and avoid those that raise it.
+            </p>
+          </div>
+        </label>
+
         <button
           onClick={handleCreate}
           disabled={isSaving}
@@ -379,6 +401,7 @@ export default function SchedulePage() {
                 <p className="text-sm text-gray-500 mt-1">
                   {schedule.days} days · {schedule.people} people · {schedule.type}
                   {schedule.focus ? ` · ${schedule.focus}` : ""}
+                  {schedule.cholesterolFriendly ? " · Cholesterol" : ""}
                 </p>
               </div>
               <button

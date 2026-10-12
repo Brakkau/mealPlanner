@@ -35,6 +35,7 @@ export type GenerateMealPlanOptions = {
   useFavourites?: boolean;
   focus?: string | null;
   fillRemainingWithAi?: boolean;
+  cholesterolFriendly?: boolean;
 };
 
 export type GeneratedMealPlan = ReturnType<typeof buildPreviewPlan>;
@@ -262,6 +263,7 @@ export async function generateMealPlan(
   onProgress: (message: string) => void = () => undefined
 ): Promise<GenerateMealPlanResult> {
   const { people, days, type, useFavourites, fillRemainingWithAi } = options;
+  const cholesterolFriendly = Boolean(options.cholesterolFriendly);
   const favouritesOnly = isFavouritesType(type);
   const styleType = favouritesOnly ? DEFAULT_AI_TYPE : type;
   const focus = resolveFocus(styleType, options.focus);
@@ -309,7 +311,8 @@ export async function generateMealPlan(
         favouriteTitles: [],
         pastRecipeTitles: [...pastRecipeTitles, ...picked.map((recipe) => recipe.title)],
         maxFavouriteTitles: MAX_FAVOURITE_TITLES,
-        maxHistoryTitles: MAX_HISTORY_TITLES
+        maxHistoryTitles: MAX_HISTORY_TITLES,
+        cholesterolFriendly
       });
 
       onProgress("Generating extra recipes...");
@@ -336,7 +339,8 @@ export async function generateMealPlan(
           type: styleType,
           focus,
           isFavourites: true,
-          fillWithAi: generated.length > 0
+          fillWithAi: generated.length > 0,
+          cholesterolFriendly
         }),
         recipes: [
           ...picked.map(favouriteToPreview),
@@ -371,7 +375,8 @@ export async function generateMealPlan(
     favouriteTitles,
     pastRecipeTitles,
     maxFavouriteTitles: MAX_FAVOURITE_TITLES,
-    maxHistoryTitles: MAX_HISTORY_TITLES
+    maxHistoryTitles: MAX_HISTORY_TITLES,
+    cholesterolFriendly
   });
 
   onProgress("Generating recipes...");
@@ -391,7 +396,7 @@ export async function generateMealPlan(
     mealPlan: buildPreviewPlan({
       people,
       days,
-      type: formatPlanTypeLabel({ type: styleType, focus }),
+      type: formatPlanTypeLabel({ type: styleType, focus, cholesterolFriendly }),
       recipes: llm.recipes.map((recipe) => generatedToPreview(recipe, people))
     }),
     tokenUsage: {

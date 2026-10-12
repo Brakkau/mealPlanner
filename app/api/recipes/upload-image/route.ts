@@ -28,7 +28,7 @@ Extract:
 
 IMPORTANT: Convert all measurements to British/metric units. Use grams (g), kilograms (kg), millilitres (ml), litres (L), tablespoons (tbsp), teaspoons (tsp). Do NOT use cups, ounces, pounds, or other imperial units.
 
-For ingredients, categorize each into one of: Vegetables, Meat, Dairy, Pantry, Frozen, Other
+For ingredients, categorize each into one of: Vegetables, Meat, Dairy, Pantry, Frozen, Condiments, Other. Use Condiments for herbs, spices, oils, vinegars, soy sauce, and stock cubes.
 
 Respond with a JSON object in this exact format:
 {

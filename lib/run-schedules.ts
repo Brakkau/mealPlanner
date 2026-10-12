@@ -17,6 +17,7 @@ type ScheduleRow = {
   focus: string | null;
   useFavourites: boolean;
   fillRemainingWithAi: boolean;
+  cholesterolFriendly: boolean;
 };
 
 async function deliverSchedule(schedule: ScheduleRow): Promise<string> {
@@ -29,7 +30,8 @@ async function deliverSchedule(schedule: ScheduleRow): Promise<string> {
     type: schedule.type,
     useFavourites: schedule.useFavourites,
     focus: schedule.focus,
-    fillRemainingWithAi
+    fillRemainingWithAi,
+    cholesterolFriendly: schedule.cholesterolFriendly
   });
 
   if (generated.status !== "completed") {
