@@ -2,12 +2,19 @@ import { prisma } from "@/lib/db";
 import type { GeneratedMealPlan } from "@/lib/generate-meal-plan";
 import type { Ingredient, MealPlan } from "@/lib/types";
 
+function asShoppingChecked(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is string => typeof entry === "string");
+}
+
 function asMealPlan(
   plan: NonNullable<Awaited<ReturnType<typeof persistMealPlanRow>>>
 ): MealPlan {
+  const { shoppingChecked, meals, ...rest } = plan;
   return {
-    ...plan,
-    meals: plan.meals.map((meal) => ({
+    ...rest,
+    shoppingChecked: asShoppingChecked(shoppingChecked),
+    meals: meals.map((meal) => ({
       ...meal,
       recipe: {
         ...meal.recipe,

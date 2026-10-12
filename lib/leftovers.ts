@@ -40,7 +40,7 @@ export async function leftoverNamesFromLastPlan(limit = 12): Promise<string[]> {
         ...meal.recipe,
         ingredients: (Array.isArray(meal.recipe.ingredients)
           ? meal.recipe.ingredients
-          : []) as Ingredient[],
+          : []) as unknown as Ingredient[],
         steps: (Array.isArray(meal.recipe.steps) ? meal.recipe.steps : []) as string[]
       }
     }))
