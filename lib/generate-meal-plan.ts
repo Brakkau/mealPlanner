@@ -15,6 +15,8 @@ import {
 } from "@/lib/meal-types";
 import { pickFavouriteRecipes } from "@/lib/pick-favourite-recipes";
 import { buildPreviewPlan, type PreviewRecipeInput } from "@/lib/meal-plan-preview";
+import { sundayDayNumber } from "@/lib/plan-days";
+import { buildSundayRoastRecipe, type SundayRoastOptions } from "@/lib/sunday-roast";
 
 const MAX_HISTORY_TITLES = Number(process.env.LLM_MAX_HISTORY_TITLES || 15);
 const MAX_FAVOURITE_TITLES = Number(process.env.LLM_MAX_FAVOURITE_TITLES || 10);
@@ -36,6 +38,10 @@ export type GenerateMealPlanOptions = {
   focus?: string | null;
   fillRemainingWithAi?: boolean;
   cholesterolFriendly?: boolean;
+  dislikes?: string[];
+  leftoverIngredientNames?: string[];
+  sundayRoast?: SundayRoastOptions | null;
+  lockedMeals?: PreviewRecipeInput[];
 };
 
 export type GeneratedMealPlan = ReturnType<typeof buildPreviewPlan>;
@@ -155,6 +161,40 @@ function generatedToPreview(recipe: GeneratedRecipe, people: number): PreviewRec
   };
 }
 
+function mergePlanRecipes(params: {
+  days: number;
+  generated: PreviewRecipeInput[];
+  roast: PreviewRecipeInput | null;
+  roastDay: number | null;
+  locked: PreviewRecipeInput[];
+}): PreviewRecipeInput[] {
+  const byDay = new Map<number, PreviewRecipeInput>();
+  for (const meal of params.locked) {
+    if (!meal.dayNumber) continue;
+    byDay.set(meal.dayNumber, { ...meal, isLocked: true });
+  }
+  if (params.roast && params.roastDay && !byDay.has(params.roastDay)) {
+    byDay.set(params.roastDay, {
+      ...params.roast,
+      dayNumber: params.roastDay,
+      isLocked: true
+    });
+  }
+  const openDays: number[] = [];
+  for (let dayNumber = 1; dayNumber <= params.days; dayNumber += 1) {
+    if (!byDay.has(dayNumber)) openDays.push(dayNumber);
+  }
+  params.generated.forEach((recipe, index) => {
+    const dayNumber = openDays[index];
+    if (dayNumber) {
+      byDay.set(dayNumber, { ...recipe, dayNumber });
+    }
+  });
+  return [...byDay.values()].sort(
+    (a, b) => (a.dayNumber ?? 0) - (b.dayNumber ?? 0)
+  );
+}
+
 async function collectLlmRecipes(params: {
   prompt: string;
   days: number;
@@ -264,12 +304,54 @@ export async function generateMealPlan(
 ): Promise<GenerateMealPlanResult> {
   const { people, days, type, useFavourites, fillRemainingWithAi } = options;
   const cholesterolFriendly = Boolean(options.cholesterolFriendly);
+  const dislikes = options.dislikes ?? [];
+  const leftoverIngredientNames = options.leftoverIngredientNames ?? [];
+  const lockedMeals = options.lockedMeals ?? [];
   const favouritesOnly = isFavouritesType(type);
   const styleType = favouritesOnly ? DEFAULT_AI_TYPE : type;
   const focus = resolveFocus(styleType, options.focus);
   const pastRecipeTitles = await getRecentRecipeTitlesFromPlans();
+  const roastDay = options.sundayRoast ? sundayDayNumber(days) : null;
+  if (options.sundayRoast && roastDay === null) {
+    throw new Error("Sunday roast needs a plan that includes Sunday. Choose 7 days (week starting Monday).");
+  }
+  const roast = options.sundayRoast
+    ? buildSundayRoastRecipe({
+        ...options.sundayRoast,
+        people,
+        cholesterolFriendly
+      })
+    : null;
+  const reservedDays = new Set<number>([
+    ...lockedMeals.map((meal) => meal.dayNumber).filter((day): day is number => typeof day === "number"),
+    ...(roastDay ? [roastDay] : [])
+  ]);
+  const openDayCount = Math.max(0, days - reservedDays.size);
 
   if (favouritesOnly) {
+    if (openDayCount === 0) {
+      return {
+        status: "completed",
+        mealPlan: buildPreviewPlan({
+          people,
+          days,
+          type: formatPlanTypeLabel({
+            type: styleType,
+            focus,
+            isFavourites: true,
+            cholesterolFriendly
+          }),
+          recipes: mergePlanRecipes({
+            days,
+            generated: [],
+            roast,
+            roastDay,
+            locked: lockedMeals
+          })
+        })
+      };
+    }
+
     onProgress("Picking from your favourites...");
     const favouriteRecipes = await prisma.recipe
       .findMany({ where: { isFavourite: true } })
@@ -285,14 +367,16 @@ export async function generateMealPlan(
       throw new Error("Add some favourite meals first, then try again.");
     }
 
-    const picked = pickFavouriteRecipes(favouriteRecipes, days, pastRecipeTitles);
+    const picked = pickFavouriteRecipes(favouriteRecipes, openDayCount, pastRecipeTitles);
 
-    if (picked.length < days && !fillRemainingWithAi) {
+    if (picked.length < openDayCount && !fillRemainingWithAi) {
       return {
         status: "need_fill",
         favouriteCount: favouriteRecipes.length,
-        requestedDays: days,
-        message: `You have ${favouriteRecipes.length} favourites but asked for ${days} days.`
+        requestedDays: openDayCount,
+        message: roast
+          ? `You have ${favouriteRecipes.length} favourites but asked for ${openDayCount} days besides the Sunday roast.`
+          : `You have ${favouriteRecipes.length} favourites but asked for ${openDayCount} days.`
       };
     }
 
@@ -301,8 +385,8 @@ export async function generateMealPlan(
       | (LlmTokenUsage & { monthly: Awaited<ReturnType<typeof recordLlmUsage>> })
       | undefined;
 
-    if (picked.length < days) {
-      const remaining = days - picked.length;
+    if (picked.length < openDayCount) {
+      const remaining = openDayCount - picked.length;
       const fillPrompt = buildGeneratePrompt({
         people,
         days: remaining,
@@ -312,7 +396,9 @@ export async function generateMealPlan(
         pastRecipeTitles: [...pastRecipeTitles, ...picked.map((recipe) => recipe.title)],
         maxFavouriteTitles: MAX_FAVOURITE_TITLES,
         maxHistoryTitles: MAX_HISTORY_TITLES,
-        cholesterolFriendly
+        cholesterolFriendly,
+        dislikes,
+        leftoverIngredientNames
       });
 
       onProgress("Generating extra recipes...");
@@ -342,10 +428,16 @@ export async function generateMealPlan(
           fillWithAi: generated.length > 0,
           cholesterolFriendly
         }),
-        recipes: [
-          ...picked.map(favouriteToPreview),
-          ...generated.map((recipe) => generatedToPreview(recipe, people))
-        ]
+        recipes: mergePlanRecipes({
+          days,
+          generated: [
+            ...picked.map(favouriteToPreview),
+            ...generated.map((recipe) => generatedToPreview(recipe, people))
+          ],
+          roast,
+          roastDay,
+          locked: lockedMeals
+        })
       }),
       ...(tokenUsage ? { tokenUsage } : {})
     };
@@ -367,22 +459,42 @@ export async function generateMealPlan(
         })
     : [];
 
+  if (openDayCount === 0) {
+    return {
+      status: "completed",
+      mealPlan: buildPreviewPlan({
+        people,
+        days,
+        type: formatPlanTypeLabel({ type: styleType, focus, cholesterolFriendly }),
+        recipes: mergePlanRecipes({
+          days,
+          generated: [],
+          roast,
+          roastDay,
+          locked: lockedMeals
+        })
+      })
+    };
+  }
+
   const prompt = buildGeneratePrompt({
     people,
-    days,
+    days: openDayCount,
     type: styleType,
     focus,
     favouriteTitles,
     pastRecipeTitles,
     maxFavouriteTitles: MAX_FAVOURITE_TITLES,
     maxHistoryTitles: MAX_HISTORY_TITLES,
-    cholesterolFriendly
+    cholesterolFriendly,
+    dislikes,
+    leftoverIngredientNames
   });
 
   onProgress("Generating recipes...");
   const llm = await collectLlmRecipes({
     prompt,
-    days,
+    days: openDayCount,
     onProgress: () => onProgress("Generating recipes...")
   });
 
@@ -397,7 +509,13 @@ export async function generateMealPlan(
       people,
       days,
       type: formatPlanTypeLabel({ type: styleType, focus, cholesterolFriendly }),
-      recipes: llm.recipes.map((recipe) => generatedToPreview(recipe, people))
+      recipes: mergePlanRecipes({
+        days,
+        generated: llm.recipes.map((recipe) => generatedToPreview(recipe, people)),
+        roast,
+        roastDay,
+        locked: lockedMeals
+      })
     }),
     tokenUsage: {
       ...llm.usage,

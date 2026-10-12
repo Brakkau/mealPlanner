@@ -19,6 +19,9 @@ type SchedulePatch = {
   useFavourites?: boolean;
   fillRemainingWithAi?: boolean;
   cholesterolFriendly?: boolean;
+  useLeftovers?: boolean;
+  sundayRoastMeat?: string | null;
+  sundayRoastVeg?: string | null;
 };
 
 export async function PATCH(
@@ -67,6 +70,15 @@ export async function PATCH(
         useFavourites: body.useFavourites ?? existing.useFavourites,
         fillRemainingWithAi: body.fillRemainingWithAi ?? existing.fillRemainingWithAi,
         cholesterolFriendly: body.cholesterolFriendly ?? existing.cholesterolFriendly,
+        useLeftovers: body.useLeftovers ?? existing.useLeftovers,
+        sundayRoastMeat:
+          body.sundayRoastMeat !== undefined
+            ? body.sundayRoastMeat?.trim() || null
+            : existing.sundayRoastMeat,
+        sundayRoastVeg:
+          body.sundayRoastVeg !== undefined
+            ? body.sundayRoastVeg?.trim() || null
+            : existing.sundayRoastVeg,
         nextRunAt: getNextRunAt(weekday, timeLocal, timeZone)
       }
     });

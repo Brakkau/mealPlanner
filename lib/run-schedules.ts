@@ -4,6 +4,8 @@ import { persistMealPlan } from "@/lib/persist-meal-plan";
 import { buildScheduleEmail, getAppBaseUrl, sendEmail } from "@/lib/email";
 import { getNextRunAt } from "@/lib/schedule-time";
 import { isFavouritesType } from "@/lib/meal-types";
+import { leftoverNamesFromLastPlan } from "@/lib/leftovers";
+import { getDislikes } from "@/lib/household-settings";
 
 type ScheduleRow = {
   id: string;
@@ -18,12 +20,17 @@ type ScheduleRow = {
   useFavourites: boolean;
   fillRemainingWithAi: boolean;
   cholesterolFriendly: boolean;
+  useLeftovers?: boolean;
+  sundayRoastMeat?: string | null;
+  sundayRoastVeg?: string | null;
 };
 
 async function deliverSchedule(schedule: ScheduleRow): Promise<string> {
   const fillRemainingWithAi =
     isFavouritesType(schedule.type) ? true : schedule.fillRemainingWithAi;
 
+  const roastMeat = schedule.sundayRoastMeat?.trim() ?? "";
+  const roastVeg = schedule.sundayRoastVeg?.trim() ?? "";
   const generated = await generateMealPlan({
     people: schedule.people,
     days: schedule.days,
@@ -31,7 +38,12 @@ async function deliverSchedule(schedule: ScheduleRow): Promise<string> {
     useFavourites: schedule.useFavourites,
     focus: schedule.focus,
     fillRemainingWithAi,
-    cholesterolFriendly: schedule.cholesterolFriendly
+    cholesterolFriendly: schedule.cholesterolFriendly,
+    dislikes: await getDislikes().catch(() => [] as string[]),
+    leftoverIngredientNames: schedule.useLeftovers
+      ? await leftoverNamesFromLastPlan().catch(() => [] as string[])
+      : [],
+    sundayRoast: roastMeat && roastVeg ? { meat: roastMeat, veg: roastVeg } : null
   });
 
   if (generated.status !== "completed") {

@@ -309,6 +309,8 @@ export function buildGeneratePrompt(input: {
   maxFavouriteTitles: number;
   maxHistoryTitles: number;
   cholesterolFriendly?: boolean;
+  dislikes?: string[];
+  leftoverIngredientNames?: string[];
 }): string {
   const {
     people,
@@ -319,7 +321,9 @@ export function buildGeneratePrompt(input: {
     pastRecipeTitles,
     maxFavouriteTitles,
     maxHistoryTitles,
-    cholesterolFriendly = false
+    cholesterolFriendly = false,
+    dislikes = [],
+    leftoverIngredientNames = []
   } = input;
   const vegetarian = isVegetarianStyle(type, focus);
   const favouriteContext =
@@ -334,6 +338,14 @@ export function buildGeneratePrompt(input: {
           .slice(0, maxHistoryTitles)
           .join(", ")}`
       : "";
+  const dislikeContext =
+    dislikes.length > 0
+      ? `\nDo not use these disliked ingredients or dishes: ${dislikes.join(", ")}.`
+      : "";
+  const leftoverContext =
+    leftoverIngredientNames.length > 0
+      ? `\nInclude exactly one leftover-style dinner that uses ingredients already in the house from last week: ${leftoverIngredientNames.join(", ")}. The other dinners can use a normal shop.`
+      : "";
 
   return `Create ${days} unique dinner recipes for ${people} people.
 
@@ -341,7 +353,7 @@ Variety and repetition:
 ${mealVarietyRules(days, vegetarian, cholesterolFriendly)}
 ${proteinRotationContext(vegetarian, cholesterolFriendly)}
 
-Meal style: ${buildStylePrompt(type, focus, cholesterolFriendly)}.${favouriteContext}${avoidContext}
+Meal style: ${buildStylePrompt(type, focus, cholesterolFriendly)}.${favouriteContext}${avoidContext}${dislikeContext}${leftoverContext}
 
 Output strict JSON only with:
 {

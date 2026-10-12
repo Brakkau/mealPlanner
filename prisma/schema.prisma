@@ -25,13 +25,14 @@ model Recipe {
 }
 
 model MealPlan {
-  id        String   @id @default(uuid())
-  days      Int
-  people    Int
-  type      String
-  meals     Meal[]
-  isSaved   Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id               String   @id @default(uuid())
+  days             Int
+  people           Int
+  type             String
+  meals            Meal[]
+  isSaved          Boolean  @default(false)
+  shoppingChecked  Json     @default("[]")
+  createdAt        DateTime @default(now())
 }
 
 model Meal {
@@ -42,6 +43,12 @@ model Meal {
   mealPlan   MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
   mealPlanId String
   isCooked   Boolean  @default(false)
+  isLocked   Boolean  @default(false)
+}
+
+model HouseholdSettings {
+  id       String @id @default("default")
+  dislikes Json   @default("[]")
 }
 
 model LlmUsageMonth {
@@ -67,6 +74,9 @@ model MealPlanSchedule {
   useFavourites       Boolean   @default(false)
   fillRemainingWithAi Boolean   @default(true)
   cholesterolFriendly Boolean   @default(false)
+  useLeftovers        Boolean   @default(false)
+  sundayRoastMeat     String?
+  sundayRoastVeg      String?
   nextRunAt           DateTime
   lastRunAt           DateTime?
   lastError           String?

@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest } from "next/server";
 import { generateMealPlan } from "@/lib/generate-meal-plan";
+import { leftoverNamesFromLastPlan } from "@/lib/leftovers";
+import { getDislikes } from "@/lib/household-settings";
 
 const SSE_HEADERS = {
   "Content-Type": "text/event-stream",
@@ -23,7 +25,10 @@ export async function POST(request: NextRequest) {
       useFavourites,
       focus,
       fillRemainingWithAi,
-      cholesterolFriendly
+      cholesterolFriendly,
+      dislikes,
+      useLeftovers,
+      sundayRoast
     } = body as {
       people: number;
       days: number;
@@ -32,6 +37,9 @@ export async function POST(request: NextRequest) {
       focus?: string | null;
       fillRemainingWithAi?: boolean;
       cholesterolFriendly?: boolean;
+      dislikes?: string[];
+      useLeftovers?: boolean;
+      sundayRoast?: { meat: string; veg: string } | null;
     };
 
     const encoder = new TextEncoder();
@@ -45,6 +53,18 @@ export async function POST(request: NextRequest) {
         };
 
         try {
+          const storedDislikes = await getDislikes().catch(() => [] as string[]);
+          const leftoverIngredientNames = useLeftovers
+            ? await leftoverNamesFromLastPlan().catch(() => [] as string[])
+            : [];
+          const roastMeat = sundayRoast?.meat?.trim() ?? "";
+          const roastVeg = sundayRoast?.veg?.trim() ?? "";
+          const mergedDislikes = [...storedDislikes, ...(Array.isArray(dislikes) ? dislikes : [])]
+            .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+            .filter(Boolean)
+            .filter((entry, index, list) =>
+              list.findIndex((other) => other.toLowerCase() === entry.toLowerCase()) === index
+            );
           const result = await generateMealPlan(
             {
               people,
@@ -53,7 +73,11 @@ export async function POST(request: NextRequest) {
               useFavourites,
               focus,
               fillRemainingWithAi,
-              cholesterolFriendly
+              cholesterolFriendly,
+              dislikes: mergedDislikes,
+              leftoverIngredientNames,
+              sundayRoast:
+                roastMeat && roastVeg ? { meat: roastMeat, veg: roastVeg } : null
             },
             sendProgress
           );

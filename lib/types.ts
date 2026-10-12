@@ -36,6 +36,8 @@ export interface Meal {
   dayNumber: number;
   mealPlanId: string;
   recipe: Recipe;
+  isCooked?: boolean;
+  isLocked?: boolean;
 }
 
 export interface MealPlan {
@@ -47,6 +49,7 @@ export interface MealPlan {
   createdAt: Date;
   /** Persisted in DB and set as the active "current" plan */
   isSaved?: boolean;
+  shoppingChecked?: string[];
 }
 
 export interface ShoppingItem {
@@ -65,6 +68,9 @@ export interface GenerateMealPlanInput {
   focus?: string | null;
   fillRemainingWithAi?: boolean;
   cholesterolFriendly?: boolean;
+  dislikes?: string[];
+  useLeftovers?: boolean;
+  sundayRoast?: { meat: string; veg: string } | null;
 }
 
 export interface MealPlanSchedule {
@@ -81,6 +87,9 @@ export interface MealPlanSchedule {
   useFavourites: boolean;
   fillRemainingWithAi: boolean;
   cholesterolFriendly: boolean;
+  useLeftovers: boolean;
+  sundayRoastMeat: string | null;
+  sundayRoastVeg: string | null;
   nextRunAt: Date;
   lastRunAt: Date | null;
   lastError: string | null;

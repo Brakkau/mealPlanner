@@ -1,9 +1,11 @@
 import {
   aggregateIngredients,
+  applyShoppingChecks,
   formatShoppingItemLabel,
   formatShoppingQuantity,
   groupShoppingItems,
-  shoppingCategoryNames
+  shoppingCategoryNames,
+  shoppingItemKey
 } from "./shopping-list";
 import type { Ingredient, MealPlan } from "./types";
 
@@ -248,5 +250,16 @@ describe("groupShoppingItems", () => {
   it("groups by category", () => {
     const grouped = groupShoppingItems(aggregateIngredients(plan, 4));
     expect(shoppingCategoryNames(grouped)).toEqual(["Vegetables", "Meat"]);
+  });
+});
+
+describe("applyShoppingChecks", () => {
+  it("restores ticks from saved keys", () => {
+    const items = aggregateIngredients(plan, 4);
+    const first = items[0];
+    expect(first).toBeDefined();
+    const restored = applyShoppingChecks(items, [shoppingItemKey(first)]);
+    expect(restored[0]?.checked).toBe(true);
+    expect(restored.slice(1).every((item) => !item.checked)).toBe(true);
   });
 });

@@ -23,6 +23,11 @@ export default function HomePage() {
   const [weeklyFocus, setWeeklyFocus] = useState("");
   const [useFavourites, setUseFavourites] = useState(false);
   const [cholesterolFriendly, setCholesterolFriendly] = useState(false);
+  const [useLeftovers, setUseLeftovers] = useState(false);
+  const [sundayRoast, setSundayRoast] = useState(false);
+  const [roastMeat, setRoastMeat] = useState("");
+  const [roastVeg, setRoastVeg] = useState("");
+  const [dislikesText, setDislikesText] = useState("");
   const [favouriteCount, setFavouriteCount] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -36,11 +41,45 @@ export default function HomePage() {
   const favouritesOnly = isFavouritesType(mealType);
   const focusPrimary = favouritesOnly ? DEFAULT_AI_TYPE : mealType;
   const allowedFocuses = getAllowedFocuses(focusPrimary);
+  const roastSlot = sundayRoast && days >= 7 ? 1 : 0;
+  const daysToFill = Math.max(0, days - roastSlot);
   const hasShortfall =
-    favouritesOnly && favouriteCount !== null && favouriteCount > 0 && favouriteCount < days;
+    favouritesOnly && favouriteCount !== null && favouriteCount > 0 && favouriteCount < daysToFill;
   const hasNoFavourites = favouritesOnly && favouriteCount === 0;
   const showWeeklyFocus = !favouritesOnly || hasShortfall;
   const showCholesterolToggle = !favouritesOnly || hasShortfall;
+  const parsedDislikes = dislikesText
+    .split(/,|\n/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  const roastReady = !sundayRoast || (Boolean(roastMeat.trim()) && Boolean(roastVeg.trim()) && days >= 7);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadSettings = async () => {
+      try {
+        const response = await fetch("/api/settings");
+        const data: unknown = await response.json();
+        if (cancelled) return;
+        if (
+          data &&
+          typeof data === "object" &&
+          "dislikes" in data &&
+          Array.isArray(data.dislikes)
+        ) {
+          setDislikesText(
+            data.dislikes.filter((entry): entry is string => typeof entry === "string").join(", ")
+          );
+        }
+      } catch (error) {
+        console.error("Error:", error);
+      }
+    };
+    void loadSettings();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!favouritesOnly) {
@@ -87,6 +126,7 @@ export default function HomePage() {
   const handleGenerate = async (fillRemainingWithAi = false) => {
     if (hasNoFavourites) return;
     if (hasShortfall && !fillRemainingWithAi) return;
+    if (!roastReady) return;
 
     setIsGenerating(true);
     setProgress(0);
@@ -100,6 +140,12 @@ export default function HomePage() {
     setLastTokenUsage(null);
 
     try {
+      await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dislikes: parsedDislikes })
+      }).catch((error) => console.error("Error:", error));
+
       const response = await fetch("/api/meal-plan/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -110,7 +156,12 @@ export default function HomePage() {
           useFavourites: favouritesOnly ? false : useFavourites,
           focus: weeklyFocus || null,
           fillRemainingWithAi,
-          cholesterolFriendly
+          cholesterolFriendly,
+          dislikes: parsedDislikes,
+          useLeftovers,
+          sundayRoast: sundayRoast
+            ? { meat: roastMeat.trim(), veg: roastVeg.trim() }
+            : null
         })
       });
 
@@ -296,11 +347,12 @@ export default function HomePage() {
         {hasShortfall && (
           <div className="space-y-3 p-4 bg-amber-50 rounded-xl">
             <p className="text-sm text-amber-900">
-              You have {favouriteCount} favourites but asked for {days} days.
+              You have {favouriteCount} favourites but asked for {daysToFill} days
+              {roastSlot ? " besides the Sunday roast" : ""}.
             </p>
             <p className="text-sm text-amber-800">
-              Fill the remaining {days - (favouriteCount ?? 0)}{" "}
-              {(days - (favouriteCount ?? 0)) === 1 ? "meal" : "meals"} with AI, or use fewer days.
+              Fill the remaining {daysToFill - (favouriteCount ?? 0)}{" "}
+              {(daysToFill - (favouriteCount ?? 0)) === 1 ? "meal" : "meals"} with AI, or use fewer days.
             </p>
             <div className="flex flex-col sm:flex-row gap-2">
               <button
@@ -360,9 +412,78 @@ export default function HomePage() {
           </label>
         )}
 
+        <label className="flex items-start gap-3 p-4 bg-green-50 rounded-xl cursor-pointer hover:bg-green-100 transition-colors">
+          <input
+            type="checkbox"
+            checked={useLeftovers}
+            onChange={(e) => setUseLeftovers(e.target.checked)}
+            className="w-5 h-5 mt-0.5 rounded border-gray-300 text-green-600 focus:ring-green-500"
+          />
+          <div>
+            <span className="text-sm font-medium text-gray-700">Use leftovers from last plan</span>
+            <p className="text-xs text-gray-500 mt-1">
+              Adds one night that uses ingredients already on last week&apos;s list.
+            </p>
+          </div>
+        </label>
+
+        <label className="flex items-start gap-3 p-4 bg-green-50 rounded-xl cursor-pointer hover:bg-green-100 transition-colors">
+          <input
+            type="checkbox"
+            checked={sundayRoast}
+            onChange={(e) => setSundayRoast(e.target.checked)}
+            className="w-5 h-5 mt-0.5 rounded border-gray-300 text-green-600 focus:ring-green-500"
+          />
+          <div className="flex-1">
+            <span className="text-sm font-medium text-gray-700">Sunday roast</span>
+            <p className="text-xs text-gray-500 mt-1">
+              Locks a set Sunday dinner. Week starts Monday, so Sunday is day 7.
+            </p>
+          </div>
+        </label>
+
+        {sundayRoast && (
+          <div className="space-y-3 p-4 bg-amber-50 rounded-xl">
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">What meat?</label>
+              <input
+                type="text"
+                value={roastMeat}
+                onChange={(e) => setRoastMeat(e.target.value)}
+                className="select-field"
+                placeholder="Beef, chicken, lamb..."
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">What veg?</label>
+              <input
+                type="text"
+                value={roastVeg}
+                onChange={(e) => setRoastVeg(e.target.value)}
+                className="select-field"
+                placeholder="Carrots, broccoli, parsnips"
+              />
+            </div>
+            {days < 7 && (
+              <p className="text-sm text-amber-800">Choose 7 days so Sunday is included.</p>
+            )}
+          </div>
+        )}
+
+        <div>
+          <label className="text-sm font-medium text-gray-700 mb-1 block">Don&apos;t cook</label>
+          <textarea
+            value={dislikesText}
+            onChange={(e) => setDislikesText(e.target.value)}
+            className="select-field min-h-[72px]"
+            placeholder="Mushrooms, kidney beans, too spicy"
+          />
+          <p className="text-xs text-gray-500 mt-1">Comma-separated. Remembered for swaps and schedules too.</p>
+        </div>
+
         <button
           onClick={() => handleGenerate(false)}
-          disabled={isGenerating || hasNoFavourites || hasShortfall}
+          disabled={isGenerating || hasNoFavourites || hasShortfall || !roastReady}
           className="w-full btn-primary flex items-center justify-center gap-3 py-4 text-lg disabled:opacity-70 disabled:cursor-not-allowed"
         >
           {isGenerating ? (

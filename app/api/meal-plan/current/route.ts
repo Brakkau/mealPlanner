@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { isPrismaConnectionError } from "@/lib/prisma-connection";
 
@@ -56,5 +57,34 @@ export async function DELETE() {
       error instanceof Error ? error.message : error
     );
     return Response.json({ error: 'Failed to clear current meal plan' }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = (await request.json()) as { shoppingChecked?: unknown };
+    const shoppingChecked = Array.isArray(body.shoppingChecked)
+      ? body.shoppingChecked.filter((entry): entry is string => typeof entry === "string")
+      : null;
+    if (!shoppingChecked) {
+      return Response.json({ error: "shoppingChecked is required" }, { status: 400 });
+    }
+
+    const currentPlan = await prisma.mealPlan.findFirst({
+      where: { isSaved: true },
+      select: { id: true }
+    });
+    if (!currentPlan) {
+      return Response.json({ error: "No current plan" }, { status: 404 });
+    }
+
+    const updated = await prisma.mealPlan.update({
+      where: { id: currentPlan.id },
+      data: { shoppingChecked }
+    });
+    return Response.json({ shoppingChecked: updated.shoppingChecked });
+  } catch (error) {
+    console.error("Error:", error);
+    return Response.json({ error: "Failed to save shopping list" }, { status: 500 });
   }
 }

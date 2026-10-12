@@ -353,6 +353,21 @@ export function groupShoppingItems(items: ShoppingItem[]): Record<string, Shoppi
   }, {} as Record<string, ShoppingItem[]>);
 }
 
+export function shoppingItemKey(item: { name: string; unit: string }): string {
+  return `${(item.name || "").trim().toLowerCase()}|${(item.unit || "").trim().toLowerCase()}`;
+}
+
+export function applyShoppingChecks(
+  items: ShoppingItem[],
+  checkedKeys: string[] | undefined
+): ShoppingItem[] {
+  const keys = new Set(checkedKeys ?? []);
+  return items.map((item) => ({
+    ...item,
+    checked: keys.has(shoppingItemKey(item))
+  }));
+}
+
 export function shoppingCategoryNames(grouped: Record<string, ShoppingItem[]>): string[] {
   const known = SHOPPING_CATEGORY_ORDER.filter((category) => grouped[category]?.length);
   const extras = Object.keys(grouped)

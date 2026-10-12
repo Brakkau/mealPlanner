@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db";
 import { getRecentRecipeTitlesFromPlans } from "@/lib/meal-plan-history";
 import { buildSwapStylePrompt } from "@/lib/meal-types";
+import { getDislikes } from "@/lib/household-settings";
 import { pickFavouriteRecipes } from "@/lib/pick-favourite-recipes";
 
 type SnapshotMeal = {
@@ -43,17 +44,20 @@ async function pickUnusedFavourite(usedIds: string[]) {
 function buildSwapPrompt(
   mealPlan: { people: number; type: string; meals: SnapshotMeal[] },
   mealId: string,
-  pastRecipeTitles: string[]
+  pastRecipeTitles: string[],
+  dislikes: string[]
 ): string {
   const existingTitles = [...new Set([
     ...mealPlan.meals.map((m) => m.recipe.title),
     ...pastRecipeTitles
   ])].slice(0, 50).join(', ');
   const style = buildSwapStylePrompt(mealPlan.type);
+  const dislikeLine =
+    dislikes.length > 0 ? `\nDo not use these disliked ingredients or dishes: ${dislikes.join(", ")}.` : "";
 
   return `Generate a single new dinner recipe for ${mealPlan.people} people.
 The meal should be ${style}.
-Do NOT suggest any of these existing recipes: ${existingTitles}
+Do NOT suggest any of these existing recipes: ${existingTitles}.${dislikeLine}
 
 Provide:
 - A creative, descriptive title
@@ -123,7 +127,8 @@ export async function POST(request: NextRequest) {
       }
 
       const pastRecipeTitles = await getRecentRecipeTitlesFromPlans();
-      const prompt = buildSwapPrompt(mealPlanSnapshot, mealId, pastRecipeTitles);
+      const dislikes = await getDislikes().catch(() => [] as string[]);
+      const prompt = buildSwapPrompt(mealPlanSnapshot, mealId, pastRecipeTitles, dislikes);
 
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
@@ -283,7 +288,8 @@ export async function POST(request: NextRequest) {
         recipe: { title: m.recipe.title }
       }))
     };
-    const prompt = buildSwapPrompt(snapshot, mealId, pastRecipeTitles);
+    const dislikes = await getDislikes().catch(() => [] as string[]);
+    const prompt = buildSwapPrompt(snapshot, mealId, pastRecipeTitles, dislikes);
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({

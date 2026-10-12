@@ -73,7 +73,8 @@ async function persistMealPlanRow(
         data: {
           recipeId,
           mealPlanId: mp.id,
-          dayNumber: meal.dayNumber
+          dayNumber: meal.dayNumber,
+          isLocked: Boolean(meal.isLocked)
         }
       });
     }

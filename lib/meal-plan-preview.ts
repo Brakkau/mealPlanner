@@ -9,6 +9,9 @@ export interface PreviewRecipeInput {
   isGenerated?: boolean;
   isFavourite?: boolean;
   createdAt?: Date;
+  dayNumber?: number;
+  isLocked?: boolean;
+  isSundayRoast?: boolean;
 }
 
 export interface PreviewPlanInput {
@@ -26,8 +29,10 @@ export function buildPreviewPlan(input: PreviewPlanInput) {
     return {
       id: globalThis.crypto.randomUUID(),
       recipeId,
-      dayNumber: index + 1,
+      dayNumber: recipeData.dayNumber ?? index + 1,
       mealPlanId,
+      isLocked: Boolean(recipeData.isLocked),
+      isCooked: false,
       recipe: {
         id: recipeId,
         title: recipeData.title,

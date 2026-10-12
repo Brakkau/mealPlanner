@@ -147,6 +147,24 @@ describe("cholesterol-friendly generation", () => {
       "help lower LDL cholesterol"
     );
   });
+
+  it("includes dislikes and leftover ingredients in the generate prompt", () => {
+    const prompt = buildGeneratePrompt({
+      people: 4,
+      days: 7,
+      type: "Family Friendly",
+      focus: null,
+      favouriteTitles: [],
+      pastRecipeTitles: [],
+      maxFavouriteTitles: 10,
+      maxHistoryTitles: 15,
+      dislikes: ["mushrooms"],
+      leftoverIngredientNames: ["chicken", "rice"]
+    });
+    expect(prompt).toContain("mushrooms");
+    expect(prompt).toContain("leftover-style dinner");
+    expect(prompt).toContain("chicken");
+  });
 });
 
 describe("isFavouritesType and isVegetarianStyle", () => {

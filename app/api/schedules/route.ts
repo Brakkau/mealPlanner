@@ -24,6 +24,9 @@ type ScheduleBody = {
   useFavourites?: boolean;
   fillRemainingWithAi?: boolean;
   cholesterolFriendly?: boolean;
+  useLeftovers?: boolean;
+  sundayRoastMeat?: string | null;
+  sundayRoastVeg?: string | null;
 };
 
 function parseScheduleInput(body: ScheduleBody) {
@@ -52,6 +55,15 @@ function parseScheduleInput(body: ScheduleBody) {
     throw new Error("Choose a valid number of days");
   }
 
+  const sundayRoastMeat = body.sundayRoastMeat?.trim() || null;
+  const sundayRoastVeg = body.sundayRoastVeg?.trim() || null;
+  if ((sundayRoastMeat && !sundayRoastVeg) || (sundayRoastVeg && !sundayRoastMeat)) {
+    throw new Error("Choose meat and veg for the Sunday roast");
+  }
+  if (sundayRoastMeat && days < 7) {
+    throw new Error("Choose 7 days so Sunday is included");
+  }
+
   return {
     email,
     weekday,
@@ -65,6 +77,9 @@ function parseScheduleInput(body: ScheduleBody) {
     useFavourites: Boolean(body.useFavourites),
     fillRemainingWithAi: body.fillRemainingWithAi !== false,
     cholesterolFriendly: Boolean(body.cholesterolFriendly),
+    useLeftovers: Boolean(body.useLeftovers),
+    sundayRoastMeat,
+    sundayRoastVeg,
     nextRunAt: getNextRunAt(weekday, timeLocal, timeZone)
   };
 }

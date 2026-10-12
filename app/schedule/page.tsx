@@ -41,6 +41,9 @@ type ScheduleRecord = {
   useFavourites: boolean;
   fillRemainingWithAi: boolean;
   cholesterolFriendly: boolean;
+  useLeftovers: boolean;
+  sundayRoastMeat: string | null;
+  sundayRoastVeg: string | null;
   nextRunAt: string;
   lastRunAt: string | null;
   lastError: string | null;
@@ -59,6 +62,10 @@ export default function SchedulePage() {
   const [weeklyFocus, setWeeklyFocus] = useState("");
   const [useFavourites, setUseFavourites] = useState(false);
   const [cholesterolFriendly, setCholesterolFriendly] = useState(false);
+  const [useLeftovers, setUseLeftovers] = useState(false);
+  const [sundayRoast, setSundayRoast] = useState(false);
+  const [roastMeat, setRoastMeat] = useState("");
+  const [roastVeg, setRoastVeg] = useState("");
   const [schedules, setSchedules] = useState<ScheduleRecord[]>([]);
   const [emailConfigured, setEmailConfigured] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
@@ -100,7 +107,11 @@ export default function SchedulePage() {
     void loadSchedules();
   }, [loadSchedules]);
 
+  const roastReady =
+    !sundayRoast || (Boolean(roastMeat.trim()) && Boolean(roastVeg.trim()) && days >= 7);
+
   const handleCreate = async () => {
+    if (!roastReady) return;
     setIsSaving(true);
     try {
       const response = await fetch("/api/schedules", {
@@ -117,7 +128,10 @@ export default function SchedulePage() {
           focus: weeklyFocus || null,
           useFavourites: favouritesOnly ? false : useFavourites,
           fillRemainingWithAi: true,
-          cholesterolFriendly
+          cholesterolFriendly,
+          useLeftovers,
+          sundayRoastMeat: sundayRoast ? roastMeat.trim() : null,
+          sundayRoastVeg: sundayRoast ? roastVeg.trim() : null
         })
       });
       const data: unknown = await response.json();
@@ -376,9 +390,53 @@ export default function SchedulePage() {
           </div>
         </label>
 
+        <label className="flex items-start gap-3 p-4 bg-green-50 rounded-xl cursor-pointer">
+          <input
+            type="checkbox"
+            checked={useLeftovers}
+            onChange={(e) => setUseLeftovers(e.target.checked)}
+            className="w-5 h-5 mt-0.5 rounded border-gray-300 text-green-600 focus:ring-green-500"
+          />
+          <span className="text-sm font-medium text-gray-700">Use leftovers from last plan</span>
+        </label>
+
+        <label className="flex items-start gap-3 p-4 bg-green-50 rounded-xl cursor-pointer">
+          <input
+            type="checkbox"
+            checked={sundayRoast}
+            onChange={(e) => setSundayRoast(e.target.checked)}
+            className="w-5 h-5 mt-0.5 rounded border-gray-300 text-green-600 focus:ring-green-500"
+          />
+          <span className="text-sm font-medium text-gray-700">Sunday roast</span>
+        </label>
+
+        {sundayRoast && (
+          <div className="space-y-3">
+            <label className="text-sm font-medium text-gray-700 mb-1 block">What meat?</label>
+            <input
+              type="text"
+              value={roastMeat}
+              onChange={(e) => setRoastMeat(e.target.value)}
+              className="select-field"
+              placeholder="Beef, chicken, lamb..."
+            />
+            <label className="text-sm font-medium text-gray-700 mb-1 block">What veg?</label>
+            <input
+              type="text"
+              value={roastVeg}
+              onChange={(e) => setRoastVeg(e.target.value)}
+              className="select-field"
+              placeholder="Carrots, broccoli, parsnips"
+            />
+            {days < 7 && (
+              <p className="text-sm text-amber-800">Choose 7 days so Sunday is included.</p>
+            )}
+          </div>
+        )}
+
         <button
           onClick={handleCreate}
-          disabled={isSaving}
+          disabled={isSaving || !roastReady}
           className="w-full btn-primary flex items-center justify-center gap-2 py-3 disabled:opacity-70"
         >
           {isSaving ? <Loader2 size={20} className="animate-spin" /> : <Clock size={20} />}
@@ -402,6 +460,7 @@ export default function SchedulePage() {
                   {schedule.days} days · {schedule.people} people · {schedule.type}
                   {schedule.focus ? ` · ${schedule.focus}` : ""}
                   {schedule.cholesterolFriendly ? " · Cholesterol" : ""}
+                  {schedule.sundayRoastMeat ? ` · Sunday roast ${schedule.sundayRoastMeat}` : ""}
                 </p>
               </div>
               <button

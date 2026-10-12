@@ -2,14 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Calendar, ShoppingCart, BookOpen, Heart, History, ChefHat, Clock } from "lucide-react";
+import { Home, ShoppingCart, BookOpen, Heart, History, ChefHat, Clock } from "lucide-react";
 import ChangelogModal from "./changelog-modal";
 import TokenUsageBadge from "./token-usage-badge";
 
 const navItems = [
   { href: "/", icon: Home, label: "Home" },
-  { href: "/current-plan", icon: ChefHat, label: "Current" },
-  { href: "/meal-plan", icon: Calendar, label: "Meal Plan" },
+  { href: "/meal-plan", icon: ChefHat, label: "Plan" },
   { href: "/shopping-list", icon: ShoppingCart, label: "Shopping" },
   { href: "/past-plans", icon: History, label: "History" },
   { href: "/recipes", icon: BookOpen, label: "Recipes" },

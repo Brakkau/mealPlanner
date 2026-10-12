@@ -4,9 +4,18 @@ export interface ChangelogEntry {
   changes: string[];
 }
 
-export const APP_VERSION = "1.12.0";
+export const APP_VERSION = "1.13.0";
 
 export const changelog: ChangelogEntry[] = [
+  {
+    version: "1.13.0",
+    date: "12 Oct 2026",
+    changes: [
+      "One Plan page for preview, cooking, locking nights, and regenerating the rest",
+      "Shopping ticks are saved with the current plan, so they survive a refresh",
+      "Remember a Don't cook list, optionally use leftovers from last week, and add a locked Sunday roast with your chosen meat and veg"
+    ]
+  },
   {
     version: "1.12.0",
     date: "12 Oct 2026",

@@ -1,18 +1,48 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Calendar, ShoppingCart, ArrowLeft, Sparkles, Save, Check } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Calendar, ShoppingCart, ArrowLeft, Sparkles, Save, Check, Lock, Trash2, RefreshCw } from "lucide-react";
 import { useAppContext } from "@/lib/context";
 import RecipeCard from "@/components/recipe-card";
 import Link from "next/link";
+import { weekdayLabelForDayNumber } from "@/lib/plan-days";
+import type { MealPlan } from "@/lib/types";
 
 export default function MealPlanPage() {
-  const router = useRouter();
   const { currentMealPlan, setCurrentMealPlan, generateShoppingList } = useAppContext();
   const [swappingMealId, setSwappingMealId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [isLoading, setIsLoading] = useState(!currentMealPlan);
+  const [cookingId, setCookingId] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
+
+  const loadCurrentPlan = useCallback(async () => {
+    try {
+      const response = await fetch("/api/meal-plan/current");
+      const data: unknown = await response.json();
+      if (data && typeof data === "object" && data !== null && "id" in data) {
+        const plan = data as MealPlan;
+        setCurrentMealPlan(plan);
+        generateShoppingList(plan, plan.people);
+        setSaved(Boolean(plan.isSaved));
+      }
+    } catch (error) {
+      console.error("Error:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [generateShoppingList, setCurrentMealPlan]);
+
+  useEffect(() => {
+    if (currentMealPlan) {
+      setIsLoading(false);
+      return;
+    }
+    void loadCurrentPlan();
+    // Load the saved plan once if this page was opened with an empty preview.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSaveAsCurrent = async () => {
     if (!currentMealPlan) return;
@@ -35,7 +65,6 @@ export default function MealPlanPage() {
       setCurrentMealPlan(savedPlan);
       generateShoppingList(savedPlan, savedPlan.people);
       setSaved(true);
-      router.push('/current-plan');
     } catch (error) {
       console.error('Error saving:', error);
       alert('Failed to save meal plan. Please try again.');
@@ -162,6 +191,112 @@ export default function MealPlanPage() {
     }
   };
 
+  const handleLock = async (mealId: string) => {
+    if (!currentMealPlan) return;
+    const meal = currentMealPlan.meals.find((entry) => entry.id === mealId);
+    if (!meal) return;
+
+    const nextLocked = !meal.isLocked;
+    setCurrentMealPlan({
+      ...currentMealPlan,
+      meals: currentMealPlan.meals.map((entry) =>
+        entry.id === mealId ? { ...entry, isLocked: nextLocked } : entry
+      )
+    });
+
+    if (!currentMealPlan.isSaved) return;
+    try {
+      const response = await fetch(`/api/meal/${mealId}/lock`, { method: "POST" });
+      if (!response.ok) throw new Error("Failed to lock meal");
+    } catch (error) {
+      console.error("Error:", error);
+      alert("Failed to lock that night.");
+    }
+  };
+
+  const handleCook = async (mealId: string) => {
+    if (!currentMealPlan?.isSaved) return;
+    setCookingId(mealId);
+    try {
+      const response = await fetch(`/api/meal/${mealId}/cooked`, { method: "POST" });
+      if (!response.ok) throw new Error("Failed to update cooked");
+      const updated = await response.json();
+      setCurrentMealPlan({
+        ...currentMealPlan,
+        meals: currentMealPlan.meals.map((entry) =>
+          entry.id === mealId ? { ...entry, isCooked: Boolean(updated.isCooked) } : entry
+        )
+      });
+    } catch (error) {
+      console.error("Error:", error);
+      alert("Failed to update cooked.");
+    } finally {
+      setCookingId(null);
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (!currentMealPlan) return;
+    const lockedCount = currentMealPlan.meals.filter((meal) => meal.isLocked).length;
+    if (lockedCount === 0) {
+      alert("Lock the nights you want to keep, then regenerate the rest.");
+      return;
+    }
+    setRegenerating(true);
+    try {
+      const response = await fetch("/api/meal-plan/regenerate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          currentMealPlan.isSaved
+            ? {
+                mealPlanId: currentMealPlan.id,
+                lockedMealIds: currentMealPlan.meals.filter((meal) => meal.isLocked).map((meal) => meal.id)
+              }
+            : {
+                draft: true,
+                mealPlanSnapshot: currentMealPlan,
+                lockedMealIds: currentMealPlan.meals.filter((meal) => meal.isLocked).map((meal) => meal.id)
+              }
+        )
+      });
+      const data: unknown = await response.json();
+      if (!response.ok) {
+        throw new Error(
+          data && typeof data === "object" && "error" in data && typeof data.error === "string"
+            ? data.error
+            : "Failed to regenerate"
+        );
+      }
+      if (data && typeof data === "object" && "mealPlan" in data && data.mealPlan) {
+        const plan = data.mealPlan as MealPlan;
+        setCurrentMealPlan(plan);
+        if (plan.isSaved) generateShoppingList(plan, plan.people);
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      alert(error instanceof Error ? error.message : "Failed to regenerate unlocked nights.");
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  const handleClear = async () => {
+    if (!currentMealPlan?.isSaved) {
+      setCurrentMealPlan(null);
+      return;
+    }
+    if (!confirm("Clear the current meal plan?")) return;
+    try {
+      await fetch("/api/meal-plan/current", { method: "DELETE" });
+      setCurrentMealPlan(null);
+      setSaved(false);
+    } catch (error) {
+      console.error("Error:", error);
+      alert("Failed to clear the plan.");
+    }
+  };
+
   const handleFavourite = async (recipeId: string) => {
     try {
       const response = await fetch(`/api/recipes/${recipeId}/favourite`, {
@@ -185,6 +320,14 @@ export default function MealPlanPage() {
       console.error('Error:', error);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-8 text-center text-gray-500">
+        Loading meal plan...
+      </div>
+    );
+  }
 
   if (!currentMealPlan) {
     return (
@@ -219,6 +362,16 @@ export default function MealPlanPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {currentMealPlan.isSaved && (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="p-2 rounded-xl bg-gray-50 text-gray-400 hover:bg-red-50 hover:text-red-500"
+              aria-label="Clear current plan"
+            >
+              <Trash2 size={20} />
+            </button>
+          )}
           <button
             onClick={handleSaveAsCurrent}
             disabled={saving || saved}
@@ -249,13 +402,34 @@ export default function MealPlanPage() {
         </div>
       </div>
 
+      <div className="mb-4">
+        <button
+          type="button"
+          onClick={handleRegenerate}
+          disabled={regenerating}
+          className="btn-secondary w-full sm:w-auto flex items-center justify-center gap-2 disabled:opacity-70"
+        >
+          {regenerating ? <RefreshCw size={18} className="animate-spin" /> : <Lock size={18} />}
+          {regenerating ? "Regenerating..." : "Regenerate unlocked nights"}
+        </button>
+        <p className="text-xs text-gray-500 mt-2">
+          Lock the meals you want to keep, then regenerate the rest.
+        </p>
+      </div>
+
       <div className="space-y-4">
         {(currentMealPlan?.meals ?? []).map((meal) => (
           <RecipeCard
             key={meal?.id}
             recipe={meal?.recipe}
             dayNumber={meal?.dayNumber}
+            dayLabel={weekdayLabelForDayNumber(meal?.dayNumber)}
             people={currentMealPlan?.people}
+            isLocked={Boolean(meal?.isLocked)}
+            isCooked={Boolean(meal?.isCooked)}
+            isCooking={cookingId === meal?.id}
+            onLock={() => handleLock(meal?.id)}
+            onCook={currentMealPlan.isSaved ? () => handleCook(meal?.id) : undefined}
             onSwap={() => handleSwap(meal?.id)}
             onFavourite={
               currentMealPlan.isSaved

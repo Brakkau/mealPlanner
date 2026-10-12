@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Clock, Users, Heart, RefreshCw, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { Clock, Users, Heart, RefreshCw, ChevronDown, ChevronUp, Trash2, Lock, Unlock, ChefHat, Check } from "lucide-react";
 import { Recipe, Ingredient } from "@/lib/types";
 
 interface RecipeCardProps {
@@ -11,7 +11,13 @@ interface RecipeCardProps {
   onSwap?: () => void;
   onFavourite?: () => void;
   onDelete?: () => void;
+  onLock?: () => void;
+  onCook?: () => void;
   isSwapping?: boolean;
+  isLocked?: boolean;
+  isCooked?: boolean;
+  isCooking?: boolean;
+  dayLabel?: string;
   showDelete?: boolean;
 }
 
@@ -22,7 +28,13 @@ export default function RecipeCard({
   onSwap,
   onFavourite,
   onDelete,
+  onLock,
+  onCook,
   isSwapping,
+  isLocked,
+  isCooked,
+  isCooking,
+  dayLabel,
   showDelete
 }: RecipeCardProps) {
   const [expanded, setExpanded] = useState(false);
@@ -43,14 +55,32 @@ export default function RecipeCard({
         <div className="flex-1">
           {dayNumber && (
             <span className="inline-block bg-green-100 text-green-700 text-xs font-semibold px-2 py-1 rounded-lg mb-2">
-              Day {dayNumber}
+              {dayLabel ? `${dayLabel} · Day ${dayNumber}` : `Day ${dayNumber}`}
             </span>
           )}
-          <h3 className="font-semibold text-gray-900 text-lg leading-tight">
+          {isLocked && (
+            <span className="inline-block ml-2 bg-amber-100 text-amber-800 text-xs font-semibold px-2 py-1 rounded-lg mb-2">
+              Locked
+            </span>
+          )}
+          <h3 className={`font-semibold text-gray-900 text-lg leading-tight ${isCooked ? "line-through text-gray-400" : ""}`}>
             {recipe?.title ?? 'Untitled Recipe'}
           </h3>
         </div>
         <div className="flex items-center gap-2">
+          {onLock && (
+            <button
+              onClick={onLock}
+              className={`p-2 rounded-xl transition-all duration-200 ${
+                isLocked
+                  ? "bg-amber-50 text-amber-700"
+                  : "bg-gray-50 text-gray-400 hover:bg-amber-50 hover:text-amber-700"
+              }`}
+              aria-label={isLocked ? "Unlock night" : "Lock night"}
+            >
+              {isLocked ? <Lock size={20} /> : <Unlock size={20} />}
+            </button>
+          )}
           {onFavourite && (
             <button
               onClick={onFavourite}
@@ -127,16 +157,32 @@ export default function RecipeCard({
         </div>
       )}
 
-      {onSwap && (
-        <button
-          onClick={onSwap}
-          disabled={isSwapping}
-          className="mt-4 w-full btn-secondary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <RefreshCw size={18} className={isSwapping ? "animate-spin" : ""} />
-          {isSwapping ? "Swapping..." : "Swap Meal"}
-        </button>
-      )}
+      <div className="mt-4 flex flex-col sm:flex-row gap-2">
+        {onCook && (
+          <button
+            onClick={onCook}
+            disabled={isCooking}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-medium disabled:opacity-50 ${
+              isCooked
+                ? "bg-green-100 text-green-700"
+                : "btn-secondary"
+            }`}
+          >
+            {isCooked ? <Check size={18} /> : <ChefHat size={18} />}
+            {isCooked ? "Cooked" : "Cook"}
+          </button>
+        )}
+        {onSwap && (
+          <button
+            onClick={onSwap}
+            disabled={isSwapping || isLocked}
+            className="flex-1 btn-secondary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RefreshCw size={18} className={isSwapping ? "animate-spin" : ""} />
+            {isSwapping ? "Swapping..." : "Swap Meal"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAppContext } from "@/lib/context";
+import type { MealPlan } from "@/lib/types";
 import { ShoppingCart, Check, ArrowLeft, Calendar } from "lucide-react";
 import Link from "next/link";
 import {
@@ -21,8 +22,37 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export default function ShoppingListPage() {
-  const { shoppingList, toggleShoppingItem, currentMealPlan } = useAppContext();
+  const { shoppingList, toggleShoppingItem, currentMealPlan, generateShoppingList } = useAppContext();
   const [condimentsInCupboard, setCondimentsInCupboard] = useState(false);
+  const [isLoading, setIsLoading] = useState(shoppingList.length === 0);
+
+  useEffect(() => {
+    if (shoppingList.length > 0) {
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const response = await fetch("/api/meal-plan/current");
+        const data: unknown = await response.json();
+        if (cancelled) return;
+        if (data && typeof data === "object" && data !== null && "id" in data) {
+          const plan = data as MealPlan;
+          generateShoppingList(plan, plan.people);
+        }
+      } catch (error) {
+        console.error("Error:", error);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [generateShoppingList, shoppingList.length]);
 
   const groupedItems = groupShoppingItems(shoppingList ?? []);
   const categories = shoppingCategoryNames(groupedItems);
@@ -31,6 +61,14 @@ export default function ShoppingListPage() {
     shoppingList?.filter(
       (item) => item?.checked || (condimentsInCupboard && item?.category === "Condiments")
     )?.length ?? 0;
+
+  if (isLoading) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-8 text-center text-gray-500">
+        Loading shopping list...
+      </div>
+    );
+  }
 
   if (totalItems === 0) {
     return (
